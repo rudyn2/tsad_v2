@@ -1,7 +1,7 @@
 from ml_collections import ConfigDict
 import torch
 import torch.nn.functional as F
-from ..models.model import Scalar
+from src.models.model import Scalar
 
 
 def soft_target_update(network, target_network, soft_target_update_rate):

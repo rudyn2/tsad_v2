@@ -4,18 +4,18 @@ import numpy as np
 from gym_carla.envs.carla_env import CarlaEnv
 from gym_carla.envs.carla_pid_env import CarlaPidEnv
 
-from .sac import SAC
-from ..models.replay_buffer import ReplayBuffer, batch_to_torch
-from ..models.model import TanhGaussianPolicy, FullyConnectedQFunction, SamplerPolicy
-from ..utils.sampler import StepSampler, TrajSampler
-from ..utils.utils import Timer, set_random_seed, prefix_metrics
-from ..utils.utils import WandBLogger
+from sac import SAC
+from src.models.replay_buffer import ReplayBuffer, batch_to_torch
+from src.models.model import TanhGaussianPolicy, FullyConnectedQFunction, SamplerPolicy
+from src.utils.sampler import StepSampler, TrajSampler
+from src.utils.utils import Timer, set_random_seed, prefix_metrics
+from src.utils.utils import WandBLogger
 
 
 ENV_PARAMS = {
             # carla connection parameters+
             'host': 'localhost',
-            'port': '2000',  # connection port
+            'port': 2000,  # connection port
             'town': 'Town01',  # which town to simulate
             'traffic_manager_port': 8000,
 
@@ -43,11 +43,11 @@ ENV_PARAMS = {
 def main(variant):
     wandb_logger = WandBLogger(config=WandBLogger.get_default_config(), variant=variant)
     wandb_config = wandb_logger.wandb_config
-    set_random_seed(wandb_config["seed"].seed)
+    set_random_seed(wandb_config["seed"])
 
     # integrate gym-carla here
     env_params = wandb_config["env_params"]
-    if args.act_mode == "pid":
+    if variant["act_mode"] == "pid":
         env_params.update({
             'continuous_speed_range': [0.0, env_params["desired_speed"]],
             'continuous_steer_range': [-1.0, 1.0],
@@ -88,10 +88,10 @@ def main(variant):
     )
     target_qf2 = deepcopy(qf2)
 
-    if wandb_config["trainer_kwargs"]["target_entropy"] >= 0.0:
-        wandb_config["trainer_kwargs"]["target_entropy"] = -np.prod(eval_sampler.env.action_space.shape).item()
+    if wandb_config["sac"]["target_entropy"] >= 0.0:
+        wandb_config["sac"]["target_entropy"] = -np.prod(eval_sampler.env.action_space.shape).item()
 
-    sac = SAC(wandb_config["sac_config"], policy, qf1, qf2, target_qf1, target_qf2)
+    sac = SAC(wandb_config["sac"], policy, qf1, qf2, target_qf1, target_qf2)
     sac.torch_to_device(wandb_config["device"])
 
     sampler_policy = SamplerPolicy(policy, wandb_config["device"])
@@ -127,6 +127,9 @@ def main(variant):
         metrics['train_time'] = train_timer()
         metrics['eval_time'] = eval_timer()
         metrics['epoch_time'] = rollout_timer() + train_timer() + eval_timer()
+
+        print(f"Epoch {epoch}, rollout_time={metrics['rollout_time']:.0f}s, train_time={metrics['train_time']:.0f}s, "
+              f"eval_time={metrics['eval_time']:.0f}s, epoch_time={metrics['epoch_time']:.0f}s")
         wandb_logger.log(metrics)
 
 
@@ -137,6 +140,7 @@ if __name__ == "__main__":
         replay_buffer_size=1000000,
         seed=42,
         device='cuda',
+        act_mode='pid',
 
         policy_arch='256-256',
         qf_arch='256-256',
@@ -144,77 +148,17 @@ if __name__ == "__main__":
         policy_log_std_offset=-1.0,
 
         n_epochs=2000,
-        n_env_steps_per_epoch=1000,
-        n_train_step_per_epoch=1000,
+        n_env_steps_per_epoch=100,
+        n_train_step_per_epoch=100,
         eval_period=10,
         eval_n_trajs=5,
-
         batch_size=256,
 
-        sac=SAC.get_default_config(),
-        logging=WandBLogger.get_default_config(),
+        sac=dict(SAC.get_default_config()),
+        logging=dict(WandBLogger.get_default_config()),
         env_params=ENV_PARAMS
     )
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data", required=True, type=str, help="Data path.")
-    parser.add_argument("--checkpoint_path", required=True, default="", type=str, help="Checkpoint path.")
 
-    parser.add_argument("--batch_size", default=4, type=int, help="Batch size")
-    parser.add_argument("--layer_size", default=128, type=int, help="Layer size")
-
-    parser.add_argument("--epochs", default=1000, type=int, help="Epochs.")
-    parser.add_argument("--num_trains_per_train_loop", default=2, type=int, help="Num batch updates per epoch.")
-    parser.add_argument("--gpu", default='0', type=str)
-    # if we want to try max_{a'} backups, set this to true
-    parser.add_argument("--max_q_backup", type=str, default="False")
-    # defaults to true, it does not backup entropy in the Q-function, as per Equation 3
-    parser.add_argument("--deterministic_backup", type=str, default="True")
-    # Defaulted to 20000 (40000 or 10000 work similarly)
-    parser.add_argument("--policy_eval_start", default=0, type=int)
-    # the value of alpha, set to 5.0 or 10.0 if not using lagrange
-    parser.add_argument('--min_q_weight', default=1.0, type=float)
-    parser.add_argument('--policy_lr', default=1e-4, type=float)  # Policy learning rate
-    parser.add_argument('--qf_lr', default=1e-4, type=float)  # Policy learning rate
-    parser.add_argument('--min_q_version', default=3, type=int)  # min_q_version = 3 (CQL(H)), version = 2 (CQL(rho))
-    parser.add_argument('--reward_scale', default=1.0, type=float)
-    parser.add_argument('--data_percentage', default=1.0, type=float)
-
-    parser.add_argument("--wandb", default=True, type=bool, help="Wheter to log in wandb or not")
-    parser.add_argument("--progress-bar", action="store_true", help="Wheter to use progress bar or not")
-    parser.add_argument('--seed', default=10, type=int)
-
-    args = parser.parse_args()
-
-    # TRAINER KWARGS
-    variant['trainer_kwargs']['max_q_backup'] = (True if args.max_q_backup == 'True' else False)
-    variant['trainer_kwargs']['deterministic_backup'] = (True if args.deterministic_backup == 'True' else False)
-    variant['trainer_kwargs']['min_q_weight'] = args.min_q_weight
-    variant['trainer_kwargs']['policy_lr'] = args.policy_lr
-    variant['trainer_kwargs']['qf_lr'] = args.policy_lr
-    variant['trainer_kwargs']['min_q_version'] = args.min_q_version
-    variant['trainer_kwargs']['reward_scale'] = args.reward_scale
-    variant['trainer_kwargs']['policy_eval_start'] = args.policy_eval_start
-    variant['trainer_kwargs']['lagrange_thresh'] = args.lagrange_thresh
-    if args.lagrange_thresh <= 0.0:
-        variant['trainer_kwargs']['with_lagrange'] = False
-
-    # ALGORITHM KWARGS
-    variant["algorithm_kwargs"]["progress_bar"] = args.progress_bar
-    variant["algorithm_kwargs"]["log_wandb"] = args.wandb
-    variant["algorithm_kwargs"]["batch_size"] = args.batch_size
-    variant["algorithm_kwargs"]["num_epochs"] = args.epochs
-    variant["algorithm_kwargs"]["num_trains_per_train_loop"] = args.num_trains_per_train_loop
-    if args.checkpoint_path != "":
-        variant["algorithm_kwargs"]["checkpoint_metric"] = "dataset_q1_values"
-        variant["algorithm_kwargs"]["save_checkpoint"] = True
-        variant["algorithm_kwargs"]["checkpoint_path"] = args.checkpoint_path
-
-    # GENERAL ARGS
-    variant["offline_buffer"] = args.data
-    variant['seed'] = args.seed
-    variant['layer_size'] = args.layer_size
-    variant['data_percentage'] = args.data_percentage
-
-    rnd = np.random.randint(low=0, high=1000000)
     main(variant)
