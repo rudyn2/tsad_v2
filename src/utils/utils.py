@@ -106,6 +106,10 @@ class WandBLogger(object):
     def output_dir(self):
         return self.config.output_dir
 
+    @property
+    def wandb_config(self):
+        return wandb.config
+
 
 def set_random_seed(seed):
     np.random.seed(seed)

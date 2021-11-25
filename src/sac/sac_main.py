@@ -1,7 +1,6 @@
 from copy import deepcopy
 import argparse
 import numpy as np
-import gym
 from gym_carla.envs.carla_env import CarlaEnv
 from gym_carla.envs.carla_pid_env import CarlaPidEnv
 
@@ -43,10 +42,11 @@ ENV_PARAMS = {
 
 def main(variant):
     wandb_logger = WandBLogger(config=WandBLogger.get_default_config(), variant=variant)
-    set_random_seed(variant["seed"].seed)
+    wandb_config = wandb_logger.wandb_config
+    set_random_seed(wandb_config["seed"].seed)
 
     # integrate gym-carla here
-    env_params = variant["env_params"]
+    env_params = wandb_config["env_params"]
     if args.act_mode == "pid":
         env_params.update({
             'continuous_speed_range': [0.0, env_params["desired_speed"]],
@@ -61,63 +61,63 @@ def main(variant):
         })
         carla_env = CarlaEnv(env_params)
 
-    train_sampler = StepSampler(carla_env, variant["max_traj_length"])
-    eval_sampler = TrajSampler(carla_env, variant["max_traj_length"])
+    train_sampler = StepSampler(carla_env, wandb_config["max_traj_length"])
+    eval_sampler = TrajSampler(carla_env, wandb_config["max_traj_length"])
 
-    replay_buffer = ReplayBuffer(variant["replay_buffer_size"].replay_buffer_size)
+    replay_buffer = ReplayBuffer(wandb_config["replay_buffer_size"])
 
     policy = TanhGaussianPolicy(
         train_sampler.env.observation_space.shape[0],
         train_sampler.env.action_space.shape[0],
-        variant["policy_arch"],
-        log_std_multiplier=variant["policy_log_std_multiplier"],
-        log_std_offset=variant["policy_log_std_offset"],
+        wandb_config["policy_arch"],
+        log_std_multiplier=wandb_config["policy_log_std_multiplier"],
+        log_std_offset=wandb_config["policy_log_std_offset"],
     )
 
     qf1 = FullyConnectedQFunction(
         train_sampler.env.observation_space.shape[0],
         train_sampler.env.action_space.shape[0],
-        variant["qf_arch"]
+        wandb_config["qf_arch"]
     )
     target_qf1 = deepcopy(qf1)
 
     qf2 = FullyConnectedQFunction(
         train_sampler.env.observation_space.shape[0],
         train_sampler.env.action_space.shape[0],
-        variant["qf_arch"]
+        wandb_config["qf_arch"]
     )
     target_qf2 = deepcopy(qf2)
 
-    if variant["trainer_kwargs"]["target_entropy"] >= 0.0:
-        variant["trainer_kwargs"]["target_entropy"] = -np.prod(eval_sampler.env.action_space.shape).item()
+    if wandb_config["trainer_kwargs"]["target_entropy"] >= 0.0:
+        wandb_config["trainer_kwargs"]["target_entropy"] = -np.prod(eval_sampler.env.action_space.shape).item()
 
-    sac = SAC(variant["sac_config"], policy, qf1, qf2, target_qf1, target_qf2)
-    sac.torch_to_device(variant["device"])
+    sac = SAC(wandb_config["sac_config"], policy, qf1, qf2, target_qf1, target_qf2)
+    sac.torch_to_device(wandb_config["device"])
 
-    sampler_policy = SamplerPolicy(policy, variant["device"])
+    sampler_policy = SamplerPolicy(policy, wandb_config["device"])
 
-    for epoch in range(variant['n_epochs']):
+    for epoch in range(wandb_config['n_epochs']):
         metrics = {}
         with Timer() as rollout_timer:
             train_sampler.sample(
-                sampler_policy, variant["n_env_steps_per_epoch"],
+                sampler_policy, wandb_config["n_env_steps_per_epoch"],
                 deterministic=False, replay_buffer=replay_buffer
             )
             metrics['env_steps'] = replay_buffer.total_steps
             metrics['epoch'] = epoch
 
         with Timer() as train_timer:
-            for batch_idx in range(variant["n_train_step_per_epoch"]):
-                batch = batch_to_torch(replay_buffer.sample(variant["batch_size"]), variant["device"])
-                if batch_idx + 1 == variant["n_train_step_per_epoch"]:
+            for batch_idx in range(wandb_config["n_train_step_per_epoch"]):
+                batch = batch_to_torch(replay_buffer.sample(wandb_config["batch_size"]), wandb_config["device"])
+                if batch_idx + 1 == wandb_config["n_train_step_per_epoch"]:
                     metrics.update(prefix_metrics(sac.train(batch), 'sac'))
                 else:
                     sac.train(batch)
 
         with Timer() as eval_timer:
-            if epoch == 0 or (epoch + 1) % variant["eval_period"] == 0:
+            if epoch == 0 or (epoch + 1) % wandb_config["eval_period"] == 0:
                 trajs = eval_sampler.sample(
-                    sampler_policy, variant["eval_n_trajs"], deterministic=True
+                    sampler_policy, wandb_config["eval_n_trajs"], deterministic=True
                 )
 
                 metrics['average_return'] = np.mean([np.sum(t['rewards']) for t in trajs])
@@ -133,11 +133,10 @@ def main(variant):
 if __name__ == "__main__":
     # noinspection PyTypeChecker
     variant = dict(
-        env='HalfCheetah-v2',
         max_traj_length=1000,
         replay_buffer_size=1000000,
         seed=42,
-        device='cpu',
+        device='cuda',
 
         policy_arch='256-256',
         qf_arch='256-256',
