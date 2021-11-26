@@ -1,2 +1,3 @@
 ml-collections
 wandb
+matplotlib
