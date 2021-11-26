@@ -131,7 +131,7 @@ class SAC(object):
                 self.config.soft_target_update_rate
             )
 
-        return dict(
+        sac_metrics = dict(
             log_pi=log_pi.mean().item(),
             policy_loss=policy_loss.item(),
             qf1_loss=qf1_loss.item(),
@@ -141,8 +141,17 @@ class SAC(object):
             average_qf1=q1_pred.mean().item(),
             average_qf2=q2_pred.mean().item(),
             average_target_q=target_q_values.mean().item(),
-            total_steps=self.total_steps,
+            total_steps=self.total_steps
         )
+        batch_metrics = dict(
+            reward_min=rewards.min().item(),
+            reward_max=rewards.max().item(),
+            rewards_mean=rewards.mean().item(),
+            pred_actions_min=new_actions.min().item(),
+            pred_actions_max=new_actions.max().item(),
+            pred_actions_mean=new_actions.mean().item()
+        )
+        return sac_metrics, batch_metrics
 
     def torch_to_device(self, device):
         for module in self.modules:

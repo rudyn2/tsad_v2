@@ -111,7 +111,9 @@ def main(variant):
             for batch_idx in range(wandb_config["n_train_step_per_epoch"]):
                 batch = batch_to_torch(replay_buffer.sample(wandb_config["batch_size"]), wandb_config["device"])
                 if batch_idx + 1 == wandb_config["n_train_step_per_epoch"]:
-                    metrics.update(prefix_metrics(sac.train(batch), 'sac'))
+                    sac_metrics, batch_metrics = sac.train(batch)
+                    metrics.update(prefix_metrics(sac_metrics, 'sac'))
+                    metrics.update(prefix_metrics(batch_metrics, 'batch'))
                 else:
                     sac.train(batch)
 
@@ -154,8 +156,8 @@ if __name__ == "__main__":
         policy_log_std_offset=-1.0,
 
         n_epochs=1000,
-        n_env_steps_per_epoch=500,
-        n_train_step_per_epoch=500,
+        n_env_steps_per_epoch=100,
+        n_train_step_per_epoch=100,
         eval_period=10,
         eval_n_trajs=5,
         batch_size=256,
