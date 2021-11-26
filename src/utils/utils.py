@@ -35,9 +35,9 @@ class WandBLogger(object):
     @staticmethod
     def get_default_config():
         config = ConfigDict()
-        config.online = False
-        config.prefix = 'SimpleSAC'
-        config.project = 'sac'
+        config.online = True
+        config.prefix = 'sac'
+        config.project = 'tsad'
         config.output_dir = '/tmp/SimpleSAC'
         config.random_delay = 0.0
         config.experiment_id = ''
@@ -85,6 +85,19 @@ class WandBLogger(object):
     def save_pickle(self, obj, filename):
         with open(os.path.join(self.config.output_dir, filename), 'wb') as fout:
             pickle.dump(obj, fout)
+
+    @staticmethod
+    def save_models(policy, qf1, qf2, tag=""):
+        policy_path = f"checkpoint_policy_{tag}.pth"
+        target_qf1_path = f"checkpoint_target_qf1_{tag}.pth"
+        target_qf2_path = f"checkpoint_target_qf2_{tag}.pth"
+
+        # save checkpoints in local
+        torch.save(policy.state_dict(), os.path.join(wandb.run.dir, policy_path))
+        torch.save(qf1.state_dict(), os.path.join(wandb.run.dir, target_qf1_path))
+        torch.save(qf2.state_dict(), os.path.join(wandb.run.dir, target_qf2_path))
+
+        wandb.save(os.path.join(wandb.run.dir, "checkpoint*"), base_path=wandb.run.dir)
 
     @property
     def online(self):

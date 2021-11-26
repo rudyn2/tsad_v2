@@ -96,6 +96,7 @@ def main(variant):
 
     sampler_policy = SamplerPolicy(policy, wandb_config["device"])
 
+    max_q = 0
     for epoch in range(wandb_config['n_epochs']):
         metrics = {}
         with Timer() as rollout_timer:
@@ -131,6 +132,11 @@ def main(variant):
         print(f"Epoch {epoch}, rollout_time={metrics['rollout_time']:.0f}s, train_time={metrics['train_time']:.0f}s, "
               f"eval_time={metrics['eval_time']:.0f}s, epoch_time={metrics['epoch_time']:.0f}s")
         wandb_logger.log(metrics)
+
+        # checkpoint condition
+        if max(metrics["sac/average_qf1"], metrics["sac/average_qf2"]) > max_q:
+            print(f"Saving model at epoch {epoch}.")
+            wandb_logger.save_models(policy, target_qf1, target_qf2)
 
 
 if __name__ == "__main__":
