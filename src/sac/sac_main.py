@@ -153,9 +153,9 @@ if __name__ == "__main__":
         policy_log_std_multiplier=1.0,
         policy_log_std_offset=-1.0,
 
-        n_epochs=2000,
-        n_env_steps_per_epoch=100,
-        n_train_step_per_epoch=100,
+        n_epochs=1000,
+        n_env_steps_per_epoch=500,
+        n_train_step_per_epoch=500,
         eval_period=10,
         eval_n_trajs=5,
         batch_size=256,
