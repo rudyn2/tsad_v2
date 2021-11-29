@@ -125,6 +125,11 @@ def main(variant):
 
                 metrics['average_return'] = np.mean([np.sum(t['rewards']) for t in trajs])
                 metrics['average_traj_length'] = np.mean([len(t['rewards']) for t in trajs])
+                total_lengths = np.sum([t["rewards"].shape[0] for t in trajs])
+                weighted_return = 0
+                for t in trajs:
+                    weighted_return += (t['rewards'].shape[0] / total_lengths) * np.sum(t['rewards'])
+                metrics['average_weighted_return'] = weighted_return
 
         metrics['rollout_time'] = rollout_timer()
         metrics['train_time'] = train_timer()
@@ -155,9 +160,9 @@ if __name__ == "__main__":
         policy_log_std_multiplier=1.0,
         policy_log_std_offset=-1.0,
 
-        n_epochs=1000,
-        n_env_steps_per_epoch=100,
-        n_train_step_per_epoch=100,
+        n_epochs=300,
+        n_env_steps_per_epoch=1000,
+        n_train_step_per_epoch=1000,
         eval_period=10,
         eval_n_trajs=5,
         batch_size=256,
