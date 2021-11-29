@@ -21,8 +21,8 @@ ENV_PARAMS = {
 
             # simulation parameters
             'verbose': False,
-            'vehicles': 100,  # number of vehicles in the simulation
-            'walkers': 10,  # number of walkers in the simulation
+            'vehicles': 150,  # number of vehicles in the simulation
+            'walkers': 30,  # number of walkers in the simulation
             'obs_size': 224,  # sensor width and height
             'max_past_step': 1,  # the number of past steps to draw
             'dt': 0.025,  # time interval between two frames
