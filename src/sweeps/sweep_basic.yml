@@ -1,0 +1,17 @@
+program: src/sac/sac_main.py
+method: grid
+metric:
+  goal: maximize
+  name: 'sac/max_avg_q'    # maximize q-values
+parameters:
+  policy_arch:
+    values: ["128-128-128", "256-256-256"]
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - "--n_epochs"
+  - "100"
+  - "--eval_period"
+  - "20"
+  - ${args}

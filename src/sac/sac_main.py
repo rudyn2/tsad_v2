@@ -96,6 +96,7 @@ def main(variant):
 
     sampler_policy = SamplerPolicy(policy, wandb_config["device"])
 
+    print("Training...")
     max_q = 0
     for epoch in range(wandb_config['n_epochs']):
         metrics = {}
@@ -137,12 +138,16 @@ def main(variant):
 
         print(f"Epoch {epoch}, rollout_time={metrics['rollout_time']:.0f}s, train_time={metrics['train_time']:.0f}s, "
               f"eval_time={metrics['eval_time']:.0f}s, epoch_time={metrics['epoch_time']:.0f}s")
-        wandb_logger.log(metrics)
 
         # checkpoint condition
-        if max(metrics["sac/average_qf1"], metrics["sac/average_qf2"]) > max_q:
+        max_avg_q = max(metrics["sac/average_qf1"], metrics["sac/average_qf2"])
+        metrics["sac/max_avg_q"] = max_avg_q
+        if max_avg_q > max_q:
             print(f"Saving model at epoch {epoch}.")
             wandb_logger.save_models(policy, target_qf1, target_qf2)
+
+        wandb_logger.log(metrics)
+    print("Done!")
 
 
 if __name__ == "__main__":
@@ -172,5 +177,38 @@ if __name__ == "__main__":
     )
 
     parser = argparse.ArgumentParser()
+    parser.add_argument("--n_epochs", type=int, default=200)
+    parser.add_argument("--eval_period", type=int, default=10)
+    parser.add_argument("--policy_arch", type=str, default="256-256")
+    parser.add_argument("--qf_arch", type=str, default="256-256")
+
+    parser.add_argument("--discount", type=float, default=0.99)
+    parser.add_argument("--reward_scale", type=float, default=1)
+    parser.add_argument("--alpha_multiplier", type=float, default=1)
+    parser.add_argument("--target_entropy", type=float, default=0.0)
+    parser.add_argument("--use_automatic_entropy", type=int, default=1)     # boolean repr
+    parser.add_argument("--backup_entropy", type=int, default=1)            # boolean repr
+    parser.add_argument("--policy_lr", type=float, default=3e-4)
+    parser.add_argument("--qf_lr", type=float, default=3e-4)
+    parser.add_argument("--soft_target_update_rate", type=float, default=5e-3)
+    parser.add_argument("--target_update_period", type=int, default=1)
+    args = parser.parse_args()
+
+    # update general parameters
+    variant["n_epochs"] = args.n_epochs
+    variant["policy_arch"] = args.policy_arch
+    variant["qf_arch"] = args.policy_arch           # CHANGE THIS TO QF_ARCH
+
+    # update sac parameters
+    variant["sac"]["discount"] = args.discount
+    variant["sac"]["reward_scale"] = args.reward_scale
+    variant["sac"]["alpha_multiplier"] = args.alpha_multiplier
+    variant["sac"]["target_entropy"] = args.target_entropy
+    variant["sac"]["use_automatic_entropy"] = bool(args.use_automatic_entropy)
+    variant["sac"]["backup_entropy"] = bool(args.backup_entropy)
+    variant["sac"]["policy_lr"] = args.policy_lr
+    variant["sac"]["qf_lr"] = args.qf_lr
+    variant["sac"]["soft_target_update_rate"] = args.soft_target_update_rate
+    variant["sac"]["target_update_period"] = args.target_update_period
 
     main(variant)
