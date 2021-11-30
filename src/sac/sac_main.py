@@ -122,7 +122,6 @@ def main(variant):
                 trajs = eval_sampler.sample(
                     sampler_policy, wandb_config["eval_n_trajs"], deterministic=True
                 )
-
                 metrics['average_return'] = np.mean([np.sum(t['rewards']) for t in trajs])
                 metrics['average_traj_length'] = np.mean([len(t['rewards']) for t in trajs])
                 total_lengths = np.sum([t["rewards"].shape[0] for t in trajs])
