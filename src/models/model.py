@@ -136,11 +136,13 @@ class Scalar(nn.Module):
 
 class DDPGSamplerPolicy(object):
 
-    def __init__(self, policy, device, exploration_noise=0.1, max_steps=10000):
+    def __init__(self, policy, device, exploration_noise=0.1, max_steps=10000, action_low=-1, action_max=1):
         self.policy = policy
         self.device = device
         self.exploration_noise = exploration_noise
         self.eps_scheduler = Epsilon(max_steps, )
+        self.action_low = action_low
+        self.action_max = action_max
 
     def __call__(self, observations, deterministic=False):
         with torch.no_grad():
@@ -153,8 +155,9 @@ class DDPGSamplerPolicy(object):
                 new_observations = new_observations.unsqueeze(0)
 
             actions = self.policy(new_observations, deterministic)
-            noise = torch.normal(0, self.eps_scheduler.step(), size=actions.shape, device=self.device)
-            actions = torch.clip(actions + noise, -1, 1)
+            if not deterministic:
+                noise = torch.normal(0, self.eps_scheduler.step(), size=actions.shape, device=self.device)
+                actions = torch.clip(actions + noise, self.action_low, self.action_max)
 
             if single_action:
                 actions = actions.squeeze(0)

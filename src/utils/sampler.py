@@ -2,7 +2,8 @@ import numpy as np
 
 
 def _preprocess_observation(obs):
-    return obs["affordances"]
+    # return obs
+    return obs["affordances"]  # (only valid for env=carla-*)
 
 
 class StepSampler(object):
@@ -27,7 +28,7 @@ class StepSampler(object):
 
             next_observation, reward, done, _ = self.env.step(action)
 
-            # we just want follow lane trajectories
+            # we just want follow lane trajectories (only valid for env=carla-*)
             if next_observation["hlc"] != 3:
                 self._traj_steps = 0
                 self._current_observation = _preprocess_observation(self.env.reset())
@@ -85,7 +86,7 @@ class TrajSampler(object):
 
                 next_observation, reward, done, _ = self.env.step(action)
 
-                # we just want follow lane trajectories
+                # # we just want follow lane trajectories (only valid for env=carla-*)
                 if next_observation["hlc"] != 3:
                     break
 

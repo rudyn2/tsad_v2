@@ -1,6 +1,8 @@
+import sys
 from copy import deepcopy
 import argparse
 import numpy as np
+import gym
 from gym_carla.envs.carla_env import CarlaEnv
 from gym_carla.envs.carla_pid_env import CarlaPidEnv
 
@@ -47,22 +49,27 @@ def main(variant):
 
     # integrate gym-carla here
     env_params = wandb_config["env_params"]
-    if variant["act_mode"] == "pid":
+    if variant["env"] == "carla-pid":
         env_params.update({
             'continuous_speed_range': [0.0, env_params["desired_speed"]],
             'continuous_steer_range': [-1.0, 1.0],
         })
-        carla_env = CarlaPidEnv(env_params)
-    else:
+        env = CarlaPidEnv(env_params)
+        action_low, action_max = -1, 1
+    elif variant["env"] == "carla-normal":
         env_params.update({
             'continuous_throttle_range': [0.0, 1.0],
             'continuous_brake_range': [0.0, 1.0],
             'continuous_steer_range': [-1.0, 1.0],
         })
-        carla_env = CarlaEnv(env_params)
+        action_low, action_max = -1, 1
+        env = CarlaEnv(env_params)
+    else:
+        action_low, action_max = -2, 2
+        env = gym.make(variant["env"])
 
-    train_sampler = StepSampler(carla_env, wandb_config["max_traj_length"])
-    eval_sampler = TrajSampler(carla_env, wandb_config["max_traj_length"])
+    train_sampler = StepSampler(env, wandb_config["max_traj_length"])
+    eval_sampler = TrajSampler(env, wandb_config["max_traj_length"])
 
     replay_buffer = ReplayBuffer(wandb_config["replay_buffer_size"])
 
@@ -71,6 +78,7 @@ def main(variant):
         train_sampler.env.action_space.shape[0],
         wandb_config["policy_arch"]
     )
+    target_policy = deepcopy(policy)
 
     qf1 = FullyConnectedQFunction(
         train_sampler.env.observation_space.shape[0],
@@ -79,15 +87,22 @@ def main(variant):
     )
     target_qf1 = deepcopy(qf1)
 
-    ddpg = DDPG(wandb_config["ddpg"], policy, qf1, target_qf1)
+    ddpg = DDPG(wandb_config["ddpg"], policy, target_policy, qf1, target_qf1)
     ddpg.torch_to_device(wandb_config["device"])
 
-    sampler_policy = DDPGSamplerPolicy(policy, wandb_config["device"], max_steps=200000)
+    sampler_policy = DDPGSamplerPolicy(policy,
+                                       wandb_config["device"],
+                                       max_steps=wandb_config["noise_max_steps"],
+                                       action_low=action_low,
+                                       action_max=action_max)
 
     print("Training...")
     max_q = 0
     for epoch in range(wandb_config['n_epochs']):
         metrics = {}
+        sys.stdout.flush()
+        sys.stdout.write(f"rolling epoch={epoch}".ljust(100))
+        sys.stdout.write("\r")
         with Timer() as rollout_timer:
             train_sampler.sample(
                 sampler_policy, wandb_config["n_env_steps_per_epoch"],
@@ -97,6 +112,9 @@ def main(variant):
             metrics['env_steps'] = replay_buffer.total_steps
             metrics['epoch'] = epoch
 
+        sys.stdout.flush()
+        sys.stdout.write(f"training epoch={epoch}".ljust(100))
+        sys.stdout.write("\r")
         with Timer() as train_timer:
             for batch_idx in range(wandb_config["n_train_step_per_epoch"]):
                 batch = batch_to_torch(replay_buffer.sample(wandb_config["batch_size"]), wandb_config["device"])
@@ -107,6 +125,9 @@ def main(variant):
                 else:
                     ddpg.train(batch)
 
+        sys.stdout.flush()
+        sys.stdout.write(f"evaluating epoch={epoch}".ljust(100))
+        sys.stdout.write("\r")
         with Timer() as eval_timer:
             if epoch == 0 or (epoch + 1) % wandb_config["eval_period"] == 0:
                 trajs = eval_sampler.sample(
@@ -144,12 +165,12 @@ if __name__ == "__main__":
         replay_buffer_size=1000000,
         seed=42,
         device='cuda',
-        act_mode='pid',
+        env='carla-pid',    # carla-pid, carla-normal, Pendulum-v0
 
         policy_arch='256-256',
         qf_arch='256-256',
 
-        n_epochs=100,
+        n_epochs=200,
         n_env_steps_per_epoch=1000,
         n_train_step_per_epoch=1000,
         eval_period=10,
@@ -162,12 +183,15 @@ if __name__ == "__main__":
     )
 
     parser = argparse.ArgumentParser()
+    parser.add_argument("--env", type=str, default="carla-pid")
+    parser.add_argument("--n_env_steps_per_epoch", type=int, default=1000)
     parser.add_argument("--n_epochs", type=int, default=200)
     parser.add_argument("--eval_period", type=int, default=10)
     parser.add_argument("--policy_arch", type=str, default="256-256")
     parser.add_argument("--qf_arch", type=str, default="256-256")
 
     parser.add_argument("--discount", type=float, default=0.99)
+    parser.add_argument("--noise_max_steps", type=int, default=100000)
     parser.add_argument("--reward_scale", type=float, default=1)
     parser.add_argument("--policy_lr", type=float, default=3e-4)
     parser.add_argument("--qf_lr", type=float, default=3e-4)
@@ -176,6 +200,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # update general parameters
+    variant["n_env_steps_per_epoch"] = args.n_env_steps_per_epoch
+    variant["eval_period"] = args.eval_period
+    variant["noise_max_steps"] = args.noise_max_steps
+    variant["env"] = args.env
     variant["n_epochs"] = args.n_epochs
     variant["policy_arch"] = args.policy_arch
     variant["qf_arch"] = args.policy_arch           # CHANGE THIS TO QF_ARCH
