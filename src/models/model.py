@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.distributions import Normal
 from torch.distributions.transformed_distribution import TransformedDistribution
 from torch.distributions.transforms import TanhTransform
+from src.utils.eps_scheduler import Epsilon
 
 
 class FullyConnectedNetwork(nn.Module):
@@ -106,49 +107,6 @@ class SamplerPolicy(object):
         return actions
 
 
-class DDPGSamplerPolicy(object):
-
-    def __init__(self, policy, device):
-        self.policy = policy
-        self.device = device
-
-    def __call__(self, observations, deterministic=False):
-        with torch.no_grad():
-            single_action = len(observations.shape) == 1
-            new_observations = torch.tensor(
-                observations, dtype=torch.float32, device=self.device
-            )
-
-            if single_action:
-                new_observations = new_observations.unsqueeze(0)
-
-            actions = self.policy(new_observations, deterministic)
-            noise = torch.normal(0, 1, size=actions.shape, device=self.device)
-            actions = torch.clip(actions + noise, -1, 1)
-
-            if single_action:
-                actions = actions.squeeze(0)
-            actions = actions.cpu().numpy()
-        return actions
-
-
-class FullyConnectedTanhPolicy(nn.Module):
-    def __init__(self, observation_dim, action_dim, arch='256-256'):
-        super().__init__()
-        self.observation_dim = observation_dim
-        self.action_dim = action_dim
-        self.arch = arch
-        self.network = FullyConnectedNetwork(
-            observation_dim, action_dim, arch
-        )
-
-    # deterministic parameter just for compatibility
-    def forward(self, observation, deterministic=True):
-        output = self.network(observation)
-        output = torch.tanh(output)
-        return output
-
-
 class FullyConnectedQFunction(nn.Module):
 
     def __init__(self, observation_dim, action_dim, arch='256-256'):
@@ -174,3 +132,51 @@ class Scalar(nn.Module):
 
     def forward(self):
         return self.constant
+
+
+class DDPGSamplerPolicy(object):
+
+    def __init__(self, policy, device, exploration_noise=0.1, max_steps=10000):
+        self.policy = policy
+        self.device = device
+        self.exploration_noise = exploration_noise
+        self.eps_scheduler = Epsilon(max_steps, )
+
+    def __call__(self, observations, deterministic=False):
+        with torch.no_grad():
+            single_action = len(observations.shape) == 1
+            new_observations = torch.tensor(
+                observations, dtype=torch.float32, device=self.device
+            )
+
+            if single_action:
+                new_observations = new_observations.unsqueeze(0)
+
+            actions = self.policy(new_observations, deterministic)
+            noise = torch.normal(0, self.eps_scheduler.step(), size=actions.shape, device=self.device)
+            actions = torch.clip(actions + noise, -1, 1)
+
+            if single_action:
+                actions = actions.squeeze(0)
+            actions = actions.cpu().numpy()
+        return actions
+
+    def get_epsilon(self):
+        return self.eps_scheduler.epsilon()
+
+
+class FullyConnectedTanhPolicy(nn.Module):
+    def __init__(self, observation_dim, action_dim, arch='256-256'):
+        super().__init__()
+        self.observation_dim = observation_dim
+        self.action_dim = action_dim
+        self.arch = arch
+        self.network = FullyConnectedNetwork(
+            observation_dim, action_dim, arch
+        )
+
+    # deterministic parameter just for compatibility
+    def forward(self, observation, deterministic=True):
+        output = self.network(observation)
+        output = torch.tanh(output)
+        return output

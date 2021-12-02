@@ -24,8 +24,8 @@ class DDPG(object):
         config.target_entropy = 0.0
         config.policy_lr = 3e-4
         config.qf_lr = 3e-4
-        config.policy_frequency = 5 # review this parameter
-        config.max_grad_norm = 1    # review this parameter
+        config.policy_frequency = 2
+        config.max_grad_norm = 0.5
         config.optimizer_type = 'adam'
         config.soft_target_update_rate = 5e-3
         config.target_update_period = 1

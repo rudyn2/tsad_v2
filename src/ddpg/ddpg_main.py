@@ -82,7 +82,7 @@ def main(variant):
     ddpg = DDPG(wandb_config["ddpg"], policy, qf1, target_qf1)
     ddpg.torch_to_device(wandb_config["device"])
 
-    sampler_policy = DDPGSamplerPolicy(policy, wandb_config["device"])
+    sampler_policy = DDPGSamplerPolicy(policy, wandb_config["device"], max_steps=200000)
 
     print("Training...")
     max_q = 0
@@ -93,6 +93,7 @@ def main(variant):
                 sampler_policy, wandb_config["n_env_steps_per_epoch"],
                 deterministic=False, replay_buffer=replay_buffer
             )
+            metrics['epsilon'] = sampler_policy.get_epsilon()
             metrics['env_steps'] = replay_buffer.total_steps
             metrics['epoch'] = epoch
 
@@ -148,8 +149,8 @@ if __name__ == "__main__":
         policy_arch='256-256',
         qf_arch='256-256',
 
-        n_epochs=300,
-        n_env_steps_per_epoch=50,
+        n_epochs=100,
+        n_env_steps_per_epoch=1000,
         n_train_step_per_epoch=1000,
         eval_period=10,
         eval_n_trajs=5,

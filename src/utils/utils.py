@@ -87,7 +87,7 @@ class WandBLogger(object):
             pickle.dump(obj, fout)
 
     @staticmethod
-    def save_models(policy, qf1, qf2, tag=""):
+    def save_models(policy, qf1, qf2=None, tag=""):
         policy_path = f"checkpoint_policy_{tag}.pth"
         target_qf1_path = f"checkpoint_target_qf1_{tag}.pth"
         target_qf2_path = f"checkpoint_target_qf2_{tag}.pth"
@@ -95,8 +95,8 @@ class WandBLogger(object):
         # save checkpoints in local
         torch.save(policy.state_dict(), os.path.join(wandb.run.dir, policy_path))
         torch.save(qf1.state_dict(), os.path.join(wandb.run.dir, target_qf1_path))
-        torch.save(qf2.state_dict(), os.path.join(wandb.run.dir, target_qf2_path))
-
+        if qf2 is not None:
+            torch.save(qf2.state_dict(), os.path.join(wandb.run.dir, target_qf2_path))
         wandb.save(os.path.join(wandb.run.dir, "checkpoint*"), base_path=wandb.run.dir)
 
     @property
