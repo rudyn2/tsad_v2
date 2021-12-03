@@ -1,0 +1,19 @@
+program: src/ddpg/ddpg_main.py
+method: grid
+metric:
+  goal: maximize
+  name: 'average_weighted_return'    # maximize return
+parameters:
+  policy_arch:
+    values: ["128-128", "256-256", "128-128-128", "256-256-256"]
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - "--n_epochs"
+  - "150"
+  - "--eval_period"
+  - "10"
+  - "--noise_max_steps"
+  - "100000"
+  - ${args}

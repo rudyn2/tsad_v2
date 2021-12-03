@@ -1,3 +1,4 @@
+import os
 import sys
 from copy import deepcopy
 import argparse
@@ -16,15 +17,15 @@ from src.utils.utils import WandBLogger
 
 ENV_PARAMS = {
             # carla connection parameters+
-            'host': 'localhost',
-            'port': 2000,  # connection port
+            'host': os.getenv("CARLA_HOST") or 'localhost',
+            'port': int(os.getenv("CARLA_PORT")) or 2000,  # connection port
             'town': 'Town01',  # which town to simulate
-            'traffic_manager_port': 8000,
+            'traffic_manager_port': int(os.getenv("CARLA_TM_PORT")) or 8000,
 
             # simulation parameters
             'verbose': False,
-            'vehicles': 10,  # number of vehicles in the simulation
-            'walkers': 5,  # number of walkers in the simulation
+            'vehicles': 50,  # number of vehicles in the simulation
+            'walkers': 10,  # number of walkers in the simulation
             'obs_size': 224,  # sensor width and height
             'max_past_step': 1,  # the number of past steps to draw
             'dt': 0.025,  # time interval between two frames
@@ -32,9 +33,9 @@ ENV_PARAMS = {
             'reward_weights': [0.3, 0.3, 0.3],
             'normalized_input': True,
             'ego_vehicle_filter': 'vehicle.lincoln*',  # filter for defining ego vehicle
-            'max_time_episode': 100,  # maximum timesteps per episode
+            'max_time_episode': 800,  # maximum timesteps per episode
             'max_waypt': 12,  # maximum number of waypoints
-            'd_behind': 12,  # distance behind the ego vehicle (meter)
+            'd_behind': 10,  # distance behind the ego vehicle (meter)
             'out_lane_thres': 2.0,  # threshold for out of lane
             'desired_speed': 6,  # desired speed (m/s)
             'speed_reduction_at_intersection': 0.75,
@@ -97,7 +98,7 @@ def main(variant):
                                        action_max=action_max)
 
     print("Training...")
-    max_q = 0
+    max_return = 0
     for epoch in range(wandb_config['n_epochs']):
         metrics = {}
         sys.stdout.flush()
@@ -150,8 +151,8 @@ def main(variant):
               f"eval_time={metrics['eval_time']:.0f}s, epoch_time={metrics['epoch_time']:.0f}s")
 
         # checkpoint condition
-        if metrics["ddpg/average_qf1"] > max_q:
-            print(f"Saving model at epoch {epoch}.")
+        if metrics["average_weighted_return"] > max_return:
+            print(f"Saving model at epoch {epoch} [max_return={max_return:.2f}].")
             wandb_logger.save_models(policy, target_qf1)
 
         wandb_logger.log(metrics)
