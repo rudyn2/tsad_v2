@@ -72,6 +72,11 @@ class TrajSampler(object):
 
     def sample(self, policy, n_trajs, deterministic=False, replay_buffer=None):
         trajs = []
+        info = {
+            'collision': [],
+            'out_of_lane': [],
+            'mean_speed': [],
+        }
         for _ in range(n_trajs):
             observations = []
             actions = []
@@ -79,12 +84,17 @@ class TrajSampler(object):
             next_observations = []
             dones = []
 
+            colision = False
+            out_of_lane = False
+            speeds = 0
+            nb_steps = 0
+
             observation = _preprocess_observation(self.env.reset())
 
             for _ in range(self.max_traj_length):
                 action = policy(np.expand_dims(observation, 0), deterministic=deterministic)[0, :]
 
-                next_observation, reward, done, _ = self.env.step(action)
+                next_observation, reward, done, info_ = self.env.step(action)
 
                 # # we just want follow lane trajectories (only valid for env=carla-*)
                 if next_observation["hlc"] != 3:
@@ -103,6 +113,10 @@ class TrajSampler(object):
                     )
 
                 observation = next_observation
+                colision = colision or info_['colision']
+                out_of_lane = out_of_lane or info_['out_of_lane']
+                speeds += info_['speed']
+                nb_steps += 1
 
                 if done:
                     break
@@ -114,8 +128,11 @@ class TrajSampler(object):
                 next_observations=np.array(next_observations, dtype=np.float32),
                 dones=np.array(dones, dtype=np.float32),
             ))
+            info['collision'].append(colision)
+            info['out_of_lane'].append(out_of_lane)
+            info['mean_speed'].append(speeds / nb_steps)
 
-        return trajs
+        return trajs, info
 
     @property
     def env(self):

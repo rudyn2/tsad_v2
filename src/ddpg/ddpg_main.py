@@ -130,10 +130,14 @@ def main(variant):
         sys.stdout.write(f"evaluating epoch={epoch}".ljust(100))
         sys.stdout.write("\r")
         with Timer() as eval_timer:
+            metrics["average_weighted_return"] = 0
             if epoch == 0 or (epoch + 1) % wandb_config["eval_period"] == 0:
-                trajs = eval_sampler.sample(
+                trajs, info = eval_sampler.sample(
                     sampler_policy, wandb_config["eval_n_trajs"], deterministic=True
                 )
+                metrics['collision_rate'] = np.mean(info['collision'])
+                metrics['out_of_lane_rate'] = np.mean(info['out_of_lane'])
+                metrics['mean_speed'] = np.mean(info['mean_speed'])
                 metrics['average_return'] = np.mean([np.sum(t['rewards']) for t in trajs])
                 metrics['average_traj_length'] = np.mean([len(t['rewards']) for t in trajs])
                 total_lengths = np.sum([t["rewards"].shape[0] for t in trajs])
@@ -216,5 +220,5 @@ if __name__ == "__main__":
     variant["ddpg"]["qf_lr"] = args.qf_lr
     variant["ddpg"]["soft_target_update_rate"] = args.soft_target_update_rate
     variant["ddpg"]["target_update_period"] = args.target_update_period
-
+    
     main(variant)
