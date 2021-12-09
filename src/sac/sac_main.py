@@ -11,7 +11,6 @@ from src.utils.sampler import StepSampler, TrajSampler
 from src.utils.utils import Timer, set_random_seed, prefix_metrics
 from src.utils.utils import WandBLogger
 
-
 ENV_PARAMS = {
             # carla connection parameters+
             'host': 'localhost',
@@ -192,6 +191,8 @@ if __name__ == "__main__":
     parser.add_argument("--qf_lr", type=float, default=3e-4)
     parser.add_argument("--soft_target_update_rate", type=float, default=5e-3)
     parser.add_argument("--target_update_period", type=int, default=1)
+    parser.add_argument("--carla-ip", type=str, required=True)
+    parser.add_argument("--carla-port", type=int, default=2000)
     args = parser.parse_args()
 
     # update general parameters
@@ -211,4 +212,6 @@ if __name__ == "__main__":
     variant["sac"]["soft_target_update_rate"] = args.soft_target_update_rate
     variant["sac"]["target_update_period"] = args.target_update_period
 
+    variant["env_params"]['host'] = args.carla_ip
+    variant["env_params"]['port'] = args.carla_port
     main(variant)
