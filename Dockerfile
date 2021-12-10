@@ -26,7 +26,7 @@ RUN rm -f Miniconda3-latest-Linux-x86_64.sh
 RUN conda create -n carla_env python=3.7
 ENV PATH /home/$user_name/miniconda3/envs/carla_env/bin:$PATH
 ENV CONDA_DEFAULT_ENV carla_env
-RUN conda install pytorch cudatoolkit=11.3 -c pytorch
+RUN conda install pytorch==1.8.0 torchvision==0.9.0 torchaudio==0.8.0 cudatoolkit=11.1 -c pytorch -c conda-forge
 RUN conda install numpy
 
 # COPY WHEELS AND INSTALL
