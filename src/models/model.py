@@ -158,7 +158,7 @@ class DDPGSamplerPolicy(object):
             actions = self.policy(new_observations, deterministic)
             if not deterministic:
                 noise = torch.normal(0, self.eps_scheduler.step(), size=actions.shape, device=self.device)
-                actions = torch.clip(actions + noise, self.action_low, self.action_max)
+                actions = torch.clamp(actions + noise, self.action_low, self.action_max)
 
             if single_action:
                 actions = actions.squeeze(0)
