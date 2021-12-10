@@ -32,4 +32,4 @@ set -- "${POSITIONAL[@]}" # restore positional parameters
 echo "Using GPU number: ${GPU}"
 echo "Connection to network: ${NETWORK}"
 
-docker run --name ${NAME} --rm --runtime=nvidia --network ${NETWORK} -e NVIDIA_VISIBLE_DEVICES=${GPU} -it -v $(pwd):/home/workspace tsad2 /bin/bash
+docker run --name ${NAME} --rm --runtime=nvidia --network ${NETWORK} -e NVIDIA_VISIBLE_DEVICES=${GPU} -it -v $(pwd):/home/client/workspace tsad2 /bin/bash
