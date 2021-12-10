@@ -2,8 +2,9 @@ import torch
 import torch.nn as nn
 from torch.distributions import Normal
 from torch.distributions.transformed_distribution import TransformedDistribution
-from torch.distributions.transforms import TanhTransform
+# from torch.distributions.transforms import TanhTransform
 from src.utils.eps_scheduler import Epsilon
+from src.utils.transforms import TanhTransform
 
 
 class FullyConnectedNetwork(nn.Module):
