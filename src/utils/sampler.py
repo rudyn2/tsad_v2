@@ -70,14 +70,14 @@ class TrajSampler(object):
         self.max_traj_length = max_traj_length
         self._env = env
 
-    def sample(self, policy, n_trajs, deterministic=False, replay_buffer=None):
+    def sample(self, policy, n_trajs, deterministic=False, replay_buffer=None, verbose=False):
         trajs = []
         info = {
             'collision': [],
             'out_of_lane': [],
             'mean_speed': [],
         }
-        for _ in range(n_trajs):
+        for n_traj in range(n_trajs):
             observations = []
             actions = []
             rewards = []
@@ -131,6 +131,10 @@ class TrajSampler(object):
             info['collision'].append(colision)
             info['out_of_lane'].append(out_of_lane)
             info['mean_speed'].append(speeds / nb_steps)
+
+            if verbose:
+                print(f"Traj #{n_traj}, steps={nb_steps}, collision={colision}, return={np.sum(rewards):.3f}, "
+                      f"out_of_lane={colision}, mean_speed={(speeds / nb_steps):.3f}")
 
         return trajs, info
 

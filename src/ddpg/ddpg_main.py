@@ -17,10 +17,10 @@ from src.utils.utils import WandBLogger
 
 ENV_PARAMS = {
             # carla connection parameters+
-            'host': os.getenv("CARLA_HOST") or 'localhost',
-            'port': int(os.getenv("CARLA_PORT")) or 2000,  # connection port
+            'host': 'localhost',
+            'port': 2000,  # connection port
             'town': 'Town01',  # which town to simulate
-            'traffic_manager_port': int(os.getenv("CARLA_TM_PORT")) or 8000,
+            'traffic_manager_port': 8000,
 
             # simulation parameters
             'verbose': False,
@@ -29,10 +29,7 @@ ENV_PARAMS = {
             'obs_size': 224,  # sensor width and height
             'max_past_step': 1,  # the number of past steps to draw
             'dt': 0.025,  # time interval between two frames
-            # reward weights [speed, collision, lane distance]
-            'reward_weights': [0.3, 0.3, 0.3],
             'normalized_input': True,
-            'ego_vehicle_filter': 'vehicle.lincoln*',  # filter for defining ego vehicle
             'max_time_episode': 800,  # maximum timesteps per episode
             'max_waypt': 12,  # maximum number of waypoints
             'd_behind': 10,  # distance behind the ego vehicle (meter)
@@ -157,6 +154,7 @@ def main(variant):
         # checkpoint condition
         if metrics["average_weighted_return"] > max_return:
             print(f"Saving model at epoch {epoch} [max_return={max_return:.2f}].")
+            max_return = metrics["average_weighted_return"]
             wandb_logger.save_models(policy, target_qf1)
 
         wandb_logger.log(metrics)
@@ -172,7 +170,7 @@ if __name__ == "__main__":
         device='cuda',
         env='carla-pid',    # carla-pid, carla-normal, Pendulum-v0
 
-        policy_arch='256-256',
+        policy_arch='256-256-256',
         qf_arch='256-256',
 
         n_epochs=200,
