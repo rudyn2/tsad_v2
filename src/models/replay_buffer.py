@@ -21,11 +21,12 @@ class ReplayBuffer(object):
         self._actions = np.zeros((self._max_size, action_dim), dtype=np.float32)
         self._rewards = np.zeros(self._max_size, dtype=np.float32)
         self._dones = np.zeros(self._max_size, dtype=np.float32)
+        self._hlcs = np.zeros(self._max_size, dtype=np.float32)
         self._next_idx = 0
         self._size = 0
         self._initialized = True
 
-    def add_sample(self, observation, action, reward, next_observation, done):
+    def add_sample(self, observation, action, reward, next_observation, done, hlc):
         if not self._initialized:
             self._init_storage(observation.size, action.size)
 
@@ -34,15 +35,16 @@ class ReplayBuffer(object):
         self._actions[self._next_idx, :] = np.array(action, dtype=np.float32)
         self._rewards[self._next_idx] = reward
         self._dones[self._next_idx] = float(done)
+        self._hlcs[self._next_idx] = float(hlc)
 
         if self._size < self._max_size:
             self._size += 1
         self._next_idx = (self._next_idx + 1) % self._max_size
         self._total_steps += 1
 
-    def add_traj(self, observations, actions, rewards, next_observations, dones):
-        for o, a, r, no, d in zip(observations, actions, rewards, next_observations, dones):
-            self.add(o, a, r, no, d)
+    def add_traj(self, observations, actions, rewards, next_observations, dones, hlcs):
+        for o, a, r, no, d, h in zip(observations, actions, rewards, next_observations, dones, hlcs):
+            self.add_sample(o, a, r, no, d, h)
 
     def sample(self, batch_size):
         indices = np.random.randint(len(self), size=batch_size)
@@ -51,7 +53,8 @@ class ReplayBuffer(object):
             actions=self._actions[indices, ...],
             rewards=self._rewards[indices, ...],
             next_observations=self._next_observations[indices, ...],
-            dones=self._dones[indices, ...]
+            dones=self._dones[indices, ...],
+            hlcs=self._hlcs[indices, ...],
         )
 
     def torch_sample(self, batch_size, device):
