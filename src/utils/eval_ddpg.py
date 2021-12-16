@@ -69,7 +69,7 @@ def main(eval_variant):
     print("Evaluating in the environment")
     with Timer() as eval_timer:
         trajs, info = eval_sampler.sample(
-            sampler_policy, eval_variant["eval_n_trajs"], deterministic=True, verbose=True
+            sampler_policy, eval_variant["eval_n_trajs"], deterministic=True, verbose=True, draw_waypoints=True
         )
         metrics['average_return'] = np.mean([np.sum(t['rewards']) for t in trajs])
         metrics['max_return'] = np.max([np.sum(t['rewards']) for t in trajs])

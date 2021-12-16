@@ -3,6 +3,7 @@ import sys
 from copy import deepcopy
 import argparse
 import numpy as np
+import carla
 import gym
 from gym_carla.envs.carla_env import CarlaEnv
 from gym_carla.envs.carla_pid_env import CarlaPidEnv
@@ -155,9 +156,9 @@ def main(variant):
         if metrics["average_weighted_return"] > max_return:
             print(f"Saving model at epoch {epoch} [max_return={max_return:.2f}].")
             max_return = metrics["average_weighted_return"]
-            wandb_logger.save_models(policy, target_qf1)
-
+            wandb_logger.save_models(policy, target_qf1, tag='best')
         wandb_logger.log(metrics)
+    wandb_logger.save_models(policy, target_qf1, tag='last')
     print("Done!")
 
 
@@ -171,7 +172,7 @@ if __name__ == "__main__":
         env='carla-pid',    # carla-pid, carla-normal, Pendulum-v0
 
         policy_arch='256-256-256',
-        qf_arch='256-256',
+        qf_arch='256-256-256',
 
         n_epochs=200,
         n_env_steps_per_epoch=1000,

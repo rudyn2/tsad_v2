@@ -1,4 +1,5 @@
 import numpy as np
+import carla
 
 
 def _preprocess_observation(obs):
@@ -14,7 +15,7 @@ class StepSampler(object):
         self._traj_steps = 0
         self._current_observation = _preprocess_observation(self.env.reset())
 
-    def sample(self, policy, n_steps, deterministic=False, replay_buffer=None):
+    def sample(self, policy, n_steps, deterministic=False, replay_buffer=None, draw_waypoints=False):
         observations = []
         actions = []
         rewards = []
@@ -26,7 +27,7 @@ class StepSampler(object):
             observation = self._current_observation
             action = policy(np.expand_dims(observation, 0), deterministic=deterministic)[0, :]
 
-            next_observation, reward, done, _ = self.env.step(action)
+            next_observation, reward, done, info = self.env.step(action)
 
             # we just want follow lane trajectories (only valid for env=carla-*)
             if next_observation["hlc"] != 3:
@@ -70,7 +71,7 @@ class TrajSampler(object):
         self.max_traj_length = max_traj_length
         self._env = env
 
-    def sample(self, policy, n_trajs, deterministic=False, replay_buffer=None, verbose=False):
+    def sample(self, policy, n_trajs, deterministic=False, replay_buffer=None, verbose=False, draw_waypoints=False):
         trajs = []
         info = {
             'collision': [],
@@ -95,6 +96,14 @@ class TrajSampler(object):
                 action = policy(np.expand_dims(observation, 0), deterministic=deterministic)[0, :]
 
                 next_observation, reward, done, info_ = self.env.step(action)
+                if draw_waypoints:
+                    for waypoint in info_['waypoints']:
+                        self._env.world.debug.draw_string(carla.Location(x=waypoint[0], y=waypoint[1], z=0),
+                                                          'x',
+                                                          draw_shadow=False,
+                                                          color=carla.Color(r=255, g=0, b=0),
+                                                          life_time=5,
+                                                          persistent_lines=True)
 
                 # # we just want follow lane trajectories (only valid for env=carla-*)
                 if next_observation["hlc"] != 3:
