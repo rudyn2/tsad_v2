@@ -1,4 +1,5 @@
 import numpy as np
+import carla
 
 
 def _preprocess_observation(obs):
@@ -14,7 +15,7 @@ class StepSampler(object):
         self._traj_steps = 0
         self._current_observation, self._current_hlc = _preprocess_observation(self.env.reset())
 
-    def sample(self, policy, n_steps, deterministic=False, replay_buffer=None):
+    def sample(self, policy, n_steps, deterministic=False, replay_buffer=None, draw_waypoints=False):
         observations = []
         actions = []
         rewards = []
@@ -70,14 +71,14 @@ class TrajSampler(object):
         self.max_traj_length = max_traj_length
         self._env = env
 
-    def sample(self, policy, n_trajs, deterministic=False, replay_buffer=None):
+    def sample(self, policy, n_trajs, deterministic=False, replay_buffer=None, verbose=False, draw_waypoints=False):
         trajs = []
         info = {
             'collision': [],
             'out_of_lane': [],
             'mean_speed': [],
         }
-        for _ in range(n_trajs):
+        for n_traj in range(n_trajs):
             observations = []
             actions = []
             rewards = []
@@ -96,7 +97,18 @@ class TrajSampler(object):
                 action = policy(np.expand_dims(observation, 0), hlc=hlc, deterministic=deterministic)[0, :]
 
                 next_observation, reward, done, info_ = self.env.step(action)
+
+                if draw_waypoints:
+                    for waypoint in info_['waypoints']:
+                        self._env.world.debug.draw_string(carla.Location(x=waypoint[0], y=waypoint[1], z=0),
+                                                          'x',
+                                                          draw_shadow=False,
+                                                          color=carla.Color(r=255, g=0, b=0),
+                                                          life_time=5,
+                                                          persistent_lines=True)
+
                 next_observation, next_hlc = _preprocess_observation(next_observation)
+
                 observations.append(observation)
                 actions.append(action)
                 rewards.append(reward)
@@ -130,6 +142,10 @@ class TrajSampler(object):
             info['collision'].append(colision)
             info['out_of_lane'].append(out_of_lane)
             info['mean_speed'].append(speeds / nb_steps)
+
+            if verbose:
+                print(f"Traj #{n_traj}, steps={nb_steps}, collision={colision}, return={np.sum(rewards):.3f}, "
+                      f"out_of_lane={colision}, mean_speed={(speeds / nb_steps):.3f}")
 
         return trajs, info
 

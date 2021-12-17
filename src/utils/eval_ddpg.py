@@ -5,8 +5,8 @@ import torch
 
 from sampler import TrajSampler
 from src.utils.utils import Timer
-from src.models.model import SamplerPolicy
-from src.models.model import TanhGaussianPolicy
+from src.models.model import DDPGSamplerPolicy
+from src.models.model import FullyConnectedTanhPolicy
 from gym_carla.envs.carla_pid_env import CarlaPidEnv
 from gym_carla.envs.carla_env import CarlaEnv
 import numpy as np
@@ -26,8 +26,6 @@ ENV_PARAMS = {
             'obs_size': 224,  # sensor width and height
             'max_past_step': 1,  # the number of past steps to draw
             'dt': 0.025,  # time interval between two frames
-            # reward weights [speed, collision, lane distance]
-            'reward_weights': [0.3, 0.3, 0.3],
             'normalized_input': True,
             'ego_vehicle_filter': 'vehicle.lincoln*',  # filter for defining ego vehicle
             'max_time_episode': 500,  # maximum timesteps per episode
@@ -58,22 +56,20 @@ def main(eval_variant):
 
     eval_sampler = TrajSampler(carla_env, eval_variant["max_traj_length"])
 
-    policy = TanhGaussianPolicy(
+    policy = FullyConnectedTanhPolicy(
         carla_env.observation_space.shape[0],
         carla_env.action_space.shape[0],
-        eval_variant["policy_arch"],
-        log_std_multiplier=eval_variant["policy_log_std_multiplier"],
-        log_std_offset=eval_variant["policy_log_std_offset"],
+        eval_variant["policy_arch"]
     )
     policy.load_state_dict(torch.load(eval_variant["checkpoint"]))
     policy.to(eval_variant["device"])
-    sampler_policy = SamplerPolicy(policy, eval_variant["device"])
+    sampler_policy = DDPGSamplerPolicy(policy, eval_variant["device"])
 
     metrics = {}
     print("Evaluating in the environment")
     with Timer() as eval_timer:
-        trajs = eval_sampler.sample(
-            sampler_policy, eval_variant["eval_n_trajs"], deterministic=True
+        trajs, info = eval_sampler.sample(
+            sampler_policy, eval_variant["eval_n_trajs"], deterministic=True, verbose=True, draw_waypoints=True
         )
         metrics['average_return'] = np.mean([np.sum(t['rewards']) for t in trajs])
         metrics['max_return'] = np.max([np.sum(t['rewards']) for t in trajs])
@@ -88,6 +84,9 @@ def main(eval_variant):
         metrics['average_weighted_return'] = weighted_return
 
     metrics['eval_time'] = eval_timer()
+    metrics['collision_rate'] = np.sum(info['collision']) / len(info['collision'])
+    metrics['out_of_lane'] = np.sum(info['out_of_lane']) / len(info['out_of_lane'])
+    metrics['mean_speed'] = np.mean(info['mean_speed'])
     pprint.pprint(metrics)
 
 
@@ -101,9 +100,7 @@ if __name__ == "__main__":
 
         policy_arch='256-256',
         qf_arch='256-256',
-        policy_log_std_multiplier=1.0,
-        policy_log_std_offset=-1.0,
-        eval_n_trajs=10,
+        eval_n_trajs=20,
         env_params=ENV_PARAMS
     )
 
