@@ -9,7 +9,7 @@ from gym_carla.envs.carla_pid_env import CarlaPidEnv
 
 from ddpg import DDPG
 from src.models.replay_buffer import ReplayBuffer, batch_to_torch
-from src.models.model import FullyConnectedQFunction, DDPGSamplerPolicy, FullyConnectedTanhPolicy
+from src.models.model import FullyConnectedQFunction, DDPGSamplerPolicy, FullyConnectedTanhPolicy, FullyConnectedTanhPolicyHLC, FullyConnectedQFunctionHLC
 from src.utils.sampler import StepSampler, TrajSampler
 from src.utils.utils import Timer, set_random_seed, prefix_metrics
 from src.utils.utils import WandBLogger
@@ -74,17 +74,19 @@ def main(variant):
 
     replay_buffer = ReplayBuffer(wandb_config["replay_buffer_size"])
 
-    policy = FullyConnectedTanhPolicy(
+    policy = FullyConnectedTanhPolicyHLC(
         train_sampler.env.observation_space.shape[0],
         train_sampler.env.action_space.shape[0],
-        wandb_config["policy_arch"]
+        wandb_config["policy_arch"],
+        nb_hlc=4,
     )
     target_policy = deepcopy(policy)
 
-    qf1 = FullyConnectedQFunction(
+    qf1 = FullyConnectedQFunctionHLC(
         train_sampler.env.observation_space.shape[0],
         train_sampler.env.action_space.shape[0],
-        wandb_config["qf_arch"]
+        wandb_config["qf_arch"],
+        nb_hlc=4,
     )
     target_qf1 = deepcopy(qf1)
 

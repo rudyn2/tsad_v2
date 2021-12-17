@@ -26,14 +26,9 @@ class StepSampler(object):
             self._traj_steps += 1
             observation = self._current_observation
             hlc = self._current_hlc
-            action = policy(np.expand_dims(observation, 0), deterministic=deterministic, hlc=hlc)[0, :]
+            action = policy(np.expand_dims(observation, 0), hlc=hlc, deterministic=deterministic)[0, :]
 
             next_observation, reward, done, _ = self.env.step(action)
-
-            # we just want follow lane trajectories (only valid for env=carla-*)
-            # if next_observation["hlc"] != 3:
-            #     self._traj_steps = 0
-            #     self._current_observation = _preprocess_observation(self.env.reset())
             next_observation, next_hlc = _preprocess_observation(next_observation)
 
             observations.append(observation)
@@ -98,14 +93,9 @@ class TrajSampler(object):
             observation, hlc = _preprocess_observation(self.env.reset())
 
             for _ in range(self.max_traj_length):
-                action = policy(np.expand_dims(observation, 0), deterministic=deterministic, hlc=hlc)[0, :]
+                action = policy(np.expand_dims(observation, 0), hlc=hlc, deterministic=deterministic)[0, :]
 
                 next_observation, reward, done, info_ = self.env.step(action)
-
-                # # we just want follow lane trajectories (only valid for env=carla-*)
-                # if next_observation["hlc"] != 3:
-                #     break
-
                 next_observation, next_hlc = _preprocess_observation(next_observation)
                 observations.append(observation)
                 actions.append(action)

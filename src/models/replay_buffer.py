@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-
+# TODO: 4 buffer, one for each hlc
 class ReplayBuffer(object):
     def __init__(self, max_size):
         self._max_size = max_size

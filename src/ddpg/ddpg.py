@@ -11,7 +11,6 @@ def soft_target_update(network, target_network, soft_target_update_rate):
             + soft_target_update_rate * v.data
         )
 
-
 class DDPG(object):
 
     @staticmethod
@@ -63,12 +62,13 @@ class DDPG(object):
         rewards = batch['rewards']
         next_observations = batch['next_observations']
         dones = batch['dones']
+        hlcs = batch['hlc']
 
         """ Q function loss """
         with torch.no_grad():
-            target_q_values = self.target_qf1(next_observations, self.target_policy(next_observations))
+            target_q_values = self.target_qf1(next_observations, self.target_policy(next_observations, hlcs), hlcs)
             q_target = self.config.reward_scale * rewards + (1. - dones) * self.config.discount * target_q_values
-        q1_pred = self.qf1(observations, actions)
+        q1_pred = self.qf1(observations, actions, hlcs)
         qf1_loss = F.mse_loss(q1_pred, q_target)
 
         self.qf_optimizer.zero_grad()
@@ -79,7 +79,7 @@ class DDPG(object):
         """ Policy loss """
         policy_loss = None
         if self._total_steps % self.config.policy_frequency == 0:
-            policy_loss = -self.qf1(observations, self.policy(observations)).mean()
+            policy_loss = -self.qf1(observations, self.policy(observations, hlcs), hlcs).mean()
             self.policy_optimizer.zero_grad()
             policy_loss.backward()
             torch.nn.utils.clip_grad_norm_(list(self.policy.parameters()), self.config.max_grad_norm)
