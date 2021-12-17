@@ -1,6 +1,12 @@
 import numpy as np
 import torch
 
+def batch_to_torch(batch, device):
+    return {
+        k: torch.from_numpy(v).to(device=device, non_blocking=True)
+        for k, v in batch.items()
+    }
+
 # TODO: 4 buffer, one for each hlc
 class ReplayBuffer(object):
     def __init__(self, max_size):
@@ -75,8 +81,72 @@ class ReplayBuffer(object):
         return self._total_steps
 
 
-def batch_to_torch(batch, device):
-    return {
-        k: torch.from_numpy(v).to(device=device, non_blocking=True)
-        for k, v in batch.items()
-    }
+class ReplayBufferHLC(object):
+    def __init__(self, max_size, nb_hlc=4):
+        self._buffers = [ReplayBuffer(max_size) for _ in range(nb_hlc)]
+        self._nb_hlc = nb_hlc
+        self._total_steps = np.sum([buffer.total_steps() for buffer in self._buffers])
+
+    def __len__(self):
+        return np.sum([len(buffer) for buffer in self._buffers])
+
+    def add_sample(self, observation, action, reward, next_observation, done, hlc):
+        for i, buffer in enumerate(self._buffers):
+            f_observation = observation[hlc == i]
+            f_action = action[hlc == i]
+            f_reward = reward[hlc == i]
+            f_next_observation = next_observation[hlc == i]
+            f_done = done[hlc == i]
+            f_hlc = hlc[hlc == i]
+            buffer.add_sample(
+                f_observation,
+                f_action,
+                f_reward,
+                f_next_observation,
+                f_done,
+                f_hlc,
+            )
+    
+    def add_traj(self, observations, actions, rewards, next_observations, dones, hlcs):
+        for i, buffer in enumerate(self._buffers):
+            f_observations = observations[hlcs == i]
+            f_actions = actions[hlcs == i]
+            f_rewards = rewards[hlcs == i]
+            f_next_observations = next_observations[hlcs == i]
+            f_dones = dones[hlcs == i]
+            f_hlcs = hlcs[hlcs == i]
+            buffer.add_traj(
+                f_observations,
+                f_actions,
+                f_rewards,
+                f_next_observations,
+                f_dones,
+                f_hlcs,
+            )
+    
+    def sample(self, batch_size):
+        samples = {}
+        for buffer in self._buffers:
+            for key, value in buffer.sample(batch_size):
+                if key in samples:
+                    samples[key] = np.concatenate((value, samples[key]), axis=0)
+                else:
+                    samples[key] = value
+        return samples
+
+    def torch_sample(self, batch_size, device):
+        return batch_to_torch(self.sample(batch_size), device)
+
+    def sample_generator(self, batch_size, n_batchs=None):
+        i = 0
+        while n_batchs is None or i < n_batchs:
+            yield self.sample(batch_size)
+            i += 1
+
+    def torch_sample_generator(self, batch_size, device, n_batchs=None):
+        for batch in self.sample_generator(batch_size, n_batchs):
+            yield batch_to_torch(batch, device)
+
+    @property
+    def total_steps(self):
+        return self._total_steps

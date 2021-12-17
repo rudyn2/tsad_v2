@@ -8,13 +8,13 @@ from gym_carla.envs.carla_env import CarlaEnv
 from gym_carla.envs.carla_pid_env import CarlaPidEnv
 
 from ddpg import DDPG
-from src.models.replay_buffer import ReplayBuffer, batch_to_torch
+from src.models.replay_buffer import ReplayBuffer, ReplayBufferHLC, batch_to_torch
 from src.models.model import FullyConnectedQFunction, DDPGSamplerPolicy, FullyConnectedTanhPolicy, FullyConnectedTanhPolicyHLC, FullyConnectedQFunctionHLC
 from src.utils.sampler import StepSampler, TrajSampler
 from src.utils.utils import Timer, set_random_seed, prefix_metrics
 from src.utils.utils import WandBLogger
 
-
+NB_HLC = 4
 ENV_PARAMS = {
             # carla connection parameters+
             'host': os.getenv("CARLA_HOST") or 'localhost',
@@ -72,13 +72,13 @@ def main(variant):
     train_sampler = StepSampler(env, wandb_config["max_traj_length"])
     eval_sampler = TrajSampler(env, wandb_config["max_traj_length"])
 
-    replay_buffer = ReplayBuffer(wandb_config["replay_buffer_size"])
+    replay_buffer = ReplayBufferHLC(wandb_config["replay_buffer_size"], nb_hlc=NB_HLC)
 
     policy = FullyConnectedTanhPolicyHLC(
         train_sampler.env.observation_space.shape[0],
         train_sampler.env.action_space.shape[0],
         wandb_config["policy_arch"],
-        nb_hlc=4,
+        nb_hlc=NB_HLC,
     )
     target_policy = deepcopy(policy)
 
@@ -86,7 +86,7 @@ def main(variant):
         train_sampler.env.observation_space.shape[0],
         train_sampler.env.action_space.shape[0],
         wandb_config["qf_arch"],
-        nb_hlc=4,
+        nb_hlc=NB_HLC,
     )
     target_qf1 = deepcopy(qf1)
 
