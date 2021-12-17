@@ -9,36 +9,36 @@ from gym_carla.envs.carla_env import CarlaEnv
 from gym_carla.envs.carla_pid_env import CarlaPidEnv
 
 from ddpg import DDPG
-from src.models.replay_buffer import ReplayBuffer, ReplayBufferHLC, batch_to_torch
-from src.models.model import FullyConnectedQFunction, DDPGSamplerPolicy, FullyConnectedTanhPolicy, FullyConnectedTanhPolicyHLC, FullyConnectedQFunctionHLC
+from src.models.replay_buffer import ReplayBufferHLC, batch_to_torch
+from src.models.model import DDPGSamplerPolicy, FullyConnectedTanhPolicyHLC, FullyConnectedQFunctionHLC
 from src.utils.sampler import StepSampler, TrajSampler
 from src.utils.utils import Timer, set_random_seed, prefix_metrics
 from src.utils.utils import WandBLogger
 
 NB_HLC = 4
 ENV_PARAMS = {
-            # carla connection parameters+
-            'host': 'localhost',
-            'port': 2000,  # connection port
-            'town': 'Town01',  # which town to simulate
-            'traffic_manager_port': 8000,
+    # carla connection parameters+
+    'host': 'localhost',
+    'port': 2000,  # connection port
+    'town': 'Town01',  # which town to simulate
+    'traffic_manager_port': 8000,
 
-            # simulation parameters
-            'verbose': False,
-            'vehicles': 50,  # number of vehicles in the simulation
-            'walkers': 10,  # number of walkers in the simulation
-            'obs_size': 224,  # sensor width and height
-            'max_past_step': 1,  # the number of past steps to draw
-            'dt': 0.025,  # time interval between two frames
-            'normalized_input': True,
-            'max_time_episode': 800,  # maximum timesteps per episode
-            'max_waypt': 12,  # maximum number of waypoints
-            'd_behind': 10,  # distance behind the ego vehicle (meter)
-            'out_lane_thres': 2.0,  # threshold for out of lane
-            'desired_speed': 6,  # desired speed (m/s)
-            'speed_reduction_at_intersection': 0.75,
-            'max_ego_spawn_times': 200,  # maximum times to spawn ego vehicle
-        }
+    # simulation parameters
+    'verbose': False,
+    'vehicles': 50,  # number of vehicles in the simulation
+    'walkers': 10,  # number of walkers in the simulation
+    'obs_size': 224,  # sensor width and height
+    'max_past_step': 1,  # the number of past steps to draw
+    'dt': 0.025,  # time interval between two frames
+    'normalized_input': True,
+    'max_time_episode': 800,  # maximum timesteps per episode
+    'max_waypt': 12,  # maximum number of waypoints
+    'd_behind': 10,  # distance behind the ego vehicle (meter)
+    'out_lane_thres': 2.0,  # threshold for out of lane
+    'desired_speed': 6,  # desired speed (m/s)
+    'speed_reduction_at_intersection': 0.75,
+    'max_ego_spawn_times': 200,  # maximum times to spawn ego vehicle
+}
 
 
 def main(variant):
