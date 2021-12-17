@@ -38,6 +38,7 @@ ENV_PARAMS = {
     'desired_speed': 6,  # desired speed (m/s)
     'speed_reduction_at_intersection': 0.75,
     'max_ego_spawn_times': 200,  # maximum times to spawn ego vehicle
+    'reward_weights': [0.3, 0.3, 0.3],
 }
 
 

@@ -85,7 +85,7 @@ class ReplayBufferHLC(object):
     def __init__(self, max_size, nb_hlc=4):
         self._buffers = [ReplayBuffer(max_size) for _ in range(nb_hlc)]
         self._nb_hlc = nb_hlc
-        self._total_steps = np.sum([buffer.total_steps() for buffer in self._buffers])
+        self._total_steps = np.sum([buffer.total_steps for buffer in self._buffers])
 
     def __len__(self):
         return np.sum([len(buffer) for buffer in self._buffers])

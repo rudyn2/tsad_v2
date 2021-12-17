@@ -46,4 +46,5 @@ ENV CARLA_HOST="localhost"
 
 WORKDIR /home/$user_name/workspace
 # RUN nohup /bin/bash -c "SDL_VIDEODRIVER=offscreen /home/carla/CarlaUE4.sh" &>/dev/null &
+# RUN nohup /bin/bash -c "SDL_VIDEODRIVER=offscreen /home/carla/CarlaUE4.sh -quality-level=low -world-port=2000 -benchmark -carla-server -carla-no-hud" &>/dev/null &
 # COPY . .

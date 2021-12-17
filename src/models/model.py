@@ -131,10 +131,10 @@ class FullyConnectedQFunctionHLC(nn.Module):
         self.action_dim = action_dim
         self.arch = arch
         self.nb_hlc = nb_hlc
-        self.networks = [FullyConnectedNetwork(
+        self.networks = nn.ModuleList([FullyConnectedNetwork(
             observation_dim + action_dim, 1, arch
-        ) for _ in range(nb_hlc)]
-
+        ) for _ in range(nb_hlc)])
+    # TODO: output as tensor
     def forward(self, observations, actions, hlc):
         input_tensor = torch.cat([observations, actions], dim=1)
         output = []
@@ -213,14 +213,15 @@ class FullyConnectedTanhPolicyHLC(nn.Module):
         self.action_dim = action_dim
         self.arch = arch
         self.nb_hlc = nb_hlc
-        self.networks = [FullyConnectedNetwork(
+        self.networks = nn.ModuleList([FullyConnectedNetwork(
             observation_dim, action_dim, arch
-        ) for _ in range(nb_hlc)]
+        ) for _ in range(nb_hlc)])
 
     # deterministic parameter just for compatibility
+    # TODO: output as tensor
     def forward(self, observation, hlc, deterministic=True):
         output = []
-        for i in self.nb_hlc:
+        for i in range(self.nb_hlc):
             filtered_observation = observation[hlc == i]
             prediction = self.networks[i](filtered_observation)
             prediction = torch.tanh(prediction)
