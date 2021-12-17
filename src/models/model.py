@@ -162,7 +162,7 @@ class DDPGSamplerPolicy(object):
         self.policy = policy
         self.device = device
         self.exploration_noise = exploration_noise
-        self.eps_scheduler = Epsilon(max_steps, epsilon_max=0.5)
+        self.eps_scheduler = Epsilon(max_steps, epsilon_max=0.5, epsilon_min=0.05)
         self.action_low = action_low
         self.action_max = action_max
 
