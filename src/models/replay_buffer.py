@@ -1,5 +1,7 @@
 import numpy as np
 import torch
+import random
+from collections import deque, namedtuple
 
 def batch_to_torch(batch, device):
     return {
@@ -7,45 +9,43 @@ def batch_to_torch(batch, device):
         for k, v in batch.items()
     }
 
-# TODO: 4 buffer, one for each hlc
 class ReplayBuffer(object):
     def __init__(self, max_size):
+        self._memory = deque([], maxlen=max_size)
         self._max_size = max_size
-        self._next_idx = 0
-        self._size = 0
-        self._initialized = False
+        self._empty_transition = {
+            "observations": np.array([]),
+            "next_observations": np.array([]),
+            "actions": np.array([]),
+            "rewards": np.array([]),
+            "dones": np.array([]),
+            "hlcs": np.array([]),
+        }
+        self._Transition = namedtuple(
+            "Transition", tuple(self._empty_transition.keys())
+        )
         self._total_steps = 0
 
-    def __len__(self):
-        return self._size
+    def empty(self):
+        """Empty memory"""        
+        self._memory.clear()
 
-    def _init_storage(self, observation_dim, action_dim):
-        self._observation_dim = observation_dim
-        self._action_dim = action_dim
-        self._observations = np.zeros((self._max_size, observation_dim), dtype=np.float32)
-        self._next_observations = np.zeros((self._max_size, observation_dim), dtype=np.float32)
-        self._actions = np.zeros((self._max_size, action_dim), dtype=np.float32)
-        self._rewards = np.zeros(self._max_size, dtype=np.float32)
-        self._dones = np.zeros(self._max_size, dtype=np.float32)
-        self._hlcs = np.zeros(self._max_size, dtype=np.float32)
-        self._next_idx = 0
-        self._size = 0
-        self._initialized = True
+    def push(self, *args):
+        """Save a experiences"""
+        self._memory.append(self._Transition(*args))
+    
+    def __len__(self):
+        return len(self._memory)
 
     def add_sample(self, observation, action, reward, next_observation, done, hlc):
-        if not self._initialized:
-            self._init_storage(observation.size, action.size)
-
-        self._observations[self._next_idx, :] = np.array(observation, dtype=np.float32)
-        self._next_observations[self._next_idx, :] = np.array(next_observation, dtype=np.float32)
-        self._actions[self._next_idx, :] = np.array(action, dtype=np.float32)
-        self._rewards[self._next_idx] = reward
-        self._dones[self._next_idx] = float(done)
-        self._hlcs[self._next_idx] = float(hlc)
-
-        if self._size < self._max_size:
-            self._size += 1
-        self._next_idx = (self._next_idx + 1) % self._max_size
+        self.push(
+            np.array(observation, dtype=np.float32)[np.newaxis,:],
+            np.array(next_observation, dtype=np.float32)[np.newaxis,:],
+            np.array(action, dtype=np.float32)[np.newaxis,:],
+            np.array([reward], dtype=np.float32),
+            np.array([done], dtype=np.float32),
+            np.array([hlc], dtype=np.float32),
+        )
         self._total_steps += 1
 
     def add_traj(self, observations, actions, rewards, next_observations, dones, hlcs):
@@ -53,15 +53,20 @@ class ReplayBuffer(object):
             self.add_sample(o, a, r, no, d, h)
 
     def sample(self, batch_size):
-        indices = np.random.randint(len(self), size=batch_size)
-        return dict(
-            observations=self._observations[indices, ...],
-            actions=self._actions[indices, ...],
-            rewards=self._rewards[indices, ...],
-            next_observations=self._next_observations[indices, ...],
-            dones=self._dones[indices, ...],
-            hlcs=self._hlcs[indices, ...],
-        )
+        size = min(len(self), batch_size)
+        if size == 0:
+            sample = self._empty_transition
+        else:
+            sample = random.sample(self._memory, size)
+            sample = self._Transition(*zip(*sample))
+            sample = self._unpack(sample)
+        return sample
+    
+    def _unpack(self, sample):
+        unpacked = {}
+        for name, value in sample._asdict().items():
+            unpacked[name] = np.concatenate(value, axis=0)
+        return unpacked
 
     def torch_sample(self, batch_size, device):
         return batch_to_torch(self.sample(batch_size), device)
@@ -91,22 +96,15 @@ class ReplayBufferHLC(object):
         return np.sum([len(buffer) for buffer in self._buffers])
 
     def add_sample(self, observation, action, reward, next_observation, done, hlc):
-        for i, buffer in enumerate(self._buffers):
-            f_observation = observation[hlc == i]
-            f_action = action[hlc == i]
-            f_reward = reward[hlc == i]
-            f_next_observation = next_observation[hlc == i]
-            f_done = done[hlc == i]
-            f_hlc = hlc[hlc == i]
-            buffer.add_sample(
-                f_observation,
-                f_action,
-                f_reward,
-                f_next_observation,
-                f_done,
-                f_hlc,
+        self._buffers[hlc].add_sample(
+                observation,
+                action,
+                reward,
+                next_observation,
+                done,
+                hlc,
             )
-    
+        
     def add_traj(self, observations, actions, rewards, next_observations, dones, hlcs):
         for i, buffer in enumerate(self._buffers):
             f_observations = observations[hlcs == i]
@@ -127,11 +125,11 @@ class ReplayBufferHLC(object):
     def sample(self, batch_size):
         samples = {}
         for buffer in self._buffers:
-            for key, value in buffer.sample(batch_size):
-                if key in samples:
-                    samples[key] = np.concatenate((value, samples[key]), axis=0)
-                else:
+            for key, value in buffer.sample(batch_size).items():
+                if key not in samples or len(samples[key]) == 0:
                     samples[key] = value
+                else:
+                    samples[key] = np.concatenate((value, samples[key]), axis=0)
         return samples
 
     def torch_sample(self, batch_size, device):

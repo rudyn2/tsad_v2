@@ -62,7 +62,7 @@ class DDPG(object):
         rewards = batch['rewards']
         next_observations = batch['next_observations']
         dones = batch['dones']
-        hlcs = batch['hlc']
+        hlcs = batch['hlcs']
 
         """ Q function loss """
         with torch.no_grad():

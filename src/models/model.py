@@ -134,14 +134,26 @@ class FullyConnectedQFunctionHLC(nn.Module):
         self.networks = nn.ModuleList([FullyConnectedNetwork(
             observation_dim + action_dim, 1, arch
         ) for _ in range(nb_hlc)])
-    # TODO: output as tensor
+
     def forward(self, observations, actions, hlc):
         input_tensor = torch.cat([observations, actions], dim=1)
         output = []
+        indices_array = []
         for i in range(self.nb_hlc):
+            mask = hlc == i
+            if len(mask.shape) == 0:
+                mask = mask.view(-1)
+            indices = torch.nonzero(mask)
             filtered_input = input_tensor[hlc == i]
             predicted_q = torch.squeeze(self.networks[i](filtered_input), dim=1)
             output.append(predicted_q)
+            indices_array.append(indices)
+        output = torch.cat(output, dim=0)
+        indices_array = torch.cat(indices_array, dim=0).squeeze(dim=1)
+        # inverse indices array
+        _, inv_indices = torch.sort(indices_array)
+        # reorder output as input
+        output = output[inv_indices]
         return output
 
 
@@ -168,20 +180,21 @@ class DDPGSamplerPolicy(object):
 
     def __call__(self, observations, hlc, deterministic=False):
         with torch.no_grad():
-            single_action = len(observations.shape) == 1
-            new_observations = torch.tensor(
-                observations, dtype=torch.float32, device=self.device
+            observations = torch.from_numpy(observations).float().to(self.device)
+            hlc = torch.tensor(
+                hlc, dtype=torch.int8, device=self.device
             )
+            if len(hlc.shape) == 1 or len(hlc.shape) == 0:
+                hlc.view(1, 1)
 
-            if single_action:
-                new_observations = new_observations.unsqueeze(0)
-
-            actions = self.policy(new_observations, hlc, deterministic=deterministic)
+            if len(observations.shape) == 1:
+                observations = observations.unsqueeze(0)
+            actions = self.policy(observations, hlc, deterministic=deterministic)
             if not deterministic:
                 noise = torch.normal(0, self.eps_scheduler.step(), size=actions.shape, device=self.device)
                 actions = torch.clamp(actions + noise, self.action_low, self.action_max)
 
-            if single_action:
+            if len(observations.shape) == 1 or observations.shape[0] == 1:
                 actions = actions.squeeze(0)
             actions = actions.cpu().numpy()
         return actions
@@ -218,12 +231,23 @@ class FullyConnectedTanhPolicyHLC(nn.Module):
         ) for _ in range(nb_hlc)])
 
     # deterministic parameter just for compatibility
-    # TODO: output as tensor
     def forward(self, observation, hlc, deterministic=True):
         output = []
+        indices_array = []
         for i in range(self.nb_hlc):
-            filtered_observation = observation[hlc == i]
+            mask = hlc == i
+            if len(mask.shape) == 0:
+                mask = mask.view(-1)
+            indices = torch.nonzero(mask)
+            filtered_observation = observation[mask]
             prediction = self.networks[i](filtered_observation)
             prediction = torch.tanh(prediction)
             output.append(prediction)
+            indices_array.append(indices)
+        output = torch.cat(output, dim=0)
+        indices_array = torch.cat(indices_array, dim=0).squeeze(dim=1)
+        # inverse indices array
+        _, inv_indices = torch.sort(indices_array)
+        # reorder output as input
+        output = output[inv_indices]
         return output
