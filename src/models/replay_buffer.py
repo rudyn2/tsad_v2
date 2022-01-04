@@ -126,9 +126,9 @@ class ReplayBufferHLC(object):
         samples = {}
         for buffer in self._buffers:
             for key, value in buffer.sample(batch_size).items():
-                if key not in samples or len(samples[key].shape) == 0:
+                if key not in samples or len(samples[key].shape) == 0 or samples[key].shape[0] == 0:
                     samples[key] = value
-                elif len(value.shape) > 0 and value.shape[0] != 0:
+                elif len(value.shape) > 0:
                     # If key is already in dict and samples[key] has length and value has length
                     samples[key] = np.concatenate((value, samples[key]), axis=0)
         return samples
