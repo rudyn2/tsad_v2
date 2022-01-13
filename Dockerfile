@@ -45,6 +45,9 @@ ENV CARLA_TM_PORT 8000
 ENV CARLA_HOST="localhost"
 
 WORKDIR /home/$user_name/workspace
+RUN mkdir /home/$user_name/params
+RUN mkdir /home/$user_name/images
+RUN mkdir /home/$user_name/databases
 # RUN nohup /bin/bash -c "SDL_VIDEODRIVER=offscreen /home/carla/CarlaUE4.sh" &>/dev/null &
 # RUN nohup /bin/bash -c "SDL_VIDEODRIVER=offscreen /home/carla/CarlaUE4.sh -quality-level=low -world-port=2000 -benchmark -carla-server -carla-no-hud" &>/dev/null &
 # COPY . .
