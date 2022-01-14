@@ -41,7 +41,7 @@ class VanillaVAE(BaseVAE):
 
         self.latent_dim = latent_dim
         if loss:
-            self.loss_fn = loss()
+            self.loss_fn = loss
         else:
             self.loss_fn = nn.CrossEntropyLoss()
 

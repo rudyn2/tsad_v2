@@ -14,7 +14,7 @@ import torch.optim as optim
 from vae import VanillaVAE
 from models.carlaDataset import HDF5Dataset
 from termcolor import colored
-from losses import DiceLoss
+from losses import DiceLoss, FocalLoss, WeightedPixelWiseNLLoss
 from utils import DiceCoefficient, iou_pytorch
 
 class VAETrainer(object):
@@ -194,6 +194,8 @@ if __name__ == "__main__":
             help='Latent space')
     vae_config.add_argument('-kldw', '--kld-weight', default=1, type=float,
             help='Kullback Divergence loss weight')
+    vae_config.add_argument('-L', '--loss', default='dice', type=str,
+            help='Loss function, can be "dice", "focal" or "weighted"')
 
     # Training Config
     train_config = parser.add_argument_group("Training config")
@@ -214,9 +216,6 @@ if __name__ == "__main__":
     torch.cuda.empty_cache()
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
-    torch.manual_seed(seed)
-    if use_cuda:
-        torch.cuda.manual_seed(seed)
     print(colored("Using device: ", "white") + colored(device, "green"))
 
     wandb.init(project="Vae")
@@ -224,7 +223,15 @@ if __name__ == "__main__":
     config.args = args
 
     print(colored("[*] Initializing model, optimizer and loss", "white"))
-    model = VanillaVAE(args.latent_space, loss=DiceLoss).to(device)
+    if args.loss == 'dice':
+        loss = DiceLoss()
+    elif args.loss == 'focal':
+        loss = FocalLoss()
+    elif args.loss == 'weighted':
+        loss = WeightedPixelWiseNLLoss({0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1})
+    else:
+        raise NotImplementedError()
+    model = VanillaVAE(args.latent_space, loss=loss).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
     # scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     print(colored("[+] Model and optimizer are ready!", "green"))
