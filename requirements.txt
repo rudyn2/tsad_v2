@@ -3,3 +3,4 @@ wandb
 matplotlib
 h5py
 tqdm
+pytorch-ignite

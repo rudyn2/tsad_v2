@@ -158,7 +158,10 @@ class VanillaVAE(BaseVAE):
         :param kwargs:
         :return:
         """
-        kld_weight = kwargs['M_N'] # Account for the minibatch samples from the dataset
+        if not 'M_N' in kwargs.keys():
+            kld_weight = 1
+        else:
+            kld_weight = kwargs['M_N'] # Account for the minibatch samples from the dataset
         recons_loss = self.loss_fn(recons, target)
 
         kld_loss = torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
