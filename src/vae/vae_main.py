@@ -1,39 +1,39 @@
+from utils import DiceCoefficient, iou_pytorch
+from losses import DiceLoss, FocalLoss, WeightedPixelWiseNLLoss
+from termcolor import colored
+from vae_backbone import VAEBackbone
+from vae import VanillaVAE
+import torch.optim as optim
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+import wandb
+import torch
+import numpy as np
+import matplotlib.pyplot as plt
 import argparse
 import sys
 
 sys.path.append('..')
-import matplotlib.pyplot as plt
-
-import numpy as np
-import torch
-import wandb
-from tqdm import tqdm
-from torch.utils.data import DataLoader
-import torch.optim as optim
-
-from vae import VanillaVAE
 from models.carlaDataset import HDF5Dataset
-from termcolor import colored
-from losses import DiceLoss, FocalLoss, WeightedPixelWiseNLLoss
-from utils import DiceCoefficient, iou_pytorch
+
 
 class VAETrainer(object):
     def __init__(self,
-        model,
-        optimizer,
-        dataset,
-        epochs,
-        batch_size,
-        train_test_split = 0.1,
-        eval_frequency = 1,
-        test_frequency = 1,
-        checkpoint_frequency = 1,
-        device = 'cpu',
-        kld_weight = 1,
-        checkpoint_dir = '/home/client/params',
-        images_dir = '/home/client/images',
-        metrics = None,
-    ) -> None:
+                 model,
+                 optimizer,
+                 dataset,
+                 epochs,
+                 batch_size,
+                 train_test_split=0.1,
+                 eval_frequency=1,
+                 test_frequency=1,
+                 checkpoint_frequency=1,
+                 device='cpu',
+                 kld_weight=1,
+                 checkpoint_dir='/home/client/params',
+                 images_dir='/home/client/images',
+                 metrics=None,
+                 ) -> None:
         super(VAETrainer).__init__()
         self._epochs = epochs
         self._eval_frequency = eval_frequency
@@ -53,9 +53,12 @@ class VAETrainer(object):
         print(colored("[*] Initializing dataset and dataloader", "white"))
         self._eval_size = int(len(dataset) * train_test_split)
         self._train_size = len(dataset) - self._eval_size
-        train_set, val_set = torch.utils.data.random_split(dataset, [self._train_size, self._eval_size])
-        self._train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, drop_last=False, pin_memory=True)
-        self._eval_loader = DataLoader(val_set, batch_size=batch_size, shuffle=True, drop_last=False, pin_memory=True)
+        train_set, val_set = torch.utils.data.random_split(
+            dataset, [self._train_size, self._eval_size])
+        self._train_loader = DataLoader(
+            train_set, batch_size=batch_size, shuffle=True, drop_last=False, pin_memory=True)
+        self._eval_loader = DataLoader(
+            val_set, batch_size=batch_size, shuffle=True, drop_last=False, pin_memory=True)
         print(colored("[+] Dataset & Dataloader Ready!", "green"))
 
     def train(self):
@@ -72,7 +75,8 @@ class VAETrainer(object):
                 self._optimizer.zero_grad()
 
                 reconst, mu, log_var = self._model(state)
-                loss = self._model.loss_function(reconst, target_semantic, mu, log_var, M_N=self._kld_weight)
+                loss = self._model.loss_function(
+                    reconst, target_semantic, mu, log_var, M_N=self._kld_weight)
                 loss['loss'].backward()
                 self._optimizer.step()
 
@@ -80,11 +84,11 @@ class VAETrainer(object):
                 running_seg_loss += loss['Reconstruction_Loss']
                 running_kld_loss += loss['KLD']
                 self.batch_log(loss, reconst, target_semantic)
-                
+
             self.train_log(running_loss, running_seg_loss, running_kld_loss)
             if epoch % self._eval_frequency == 0:
                 self.eval()
-            
+
             if epoch % self._test_frequency == 0:
                 self.test()
 
@@ -97,7 +101,7 @@ class VAETrainer(object):
         to_log = {
             "Loss": loss['loss'].item(),
             "Seg Loss": loss['Reconstruction_Loss'],
-            "KLD Loss": loss['KLD'], 
+            "KLD Loss": loss['KLD'],
         }
         # with torch.no_grad():
         #     for name, loss_fn in self._metrics.items():
@@ -134,14 +138,16 @@ class VAETrainer(object):
                 target_semantic = target_semantic.to(self.device).long()
 
                 reconst, mu, log_var = self._model(state)
-                loss = self._model.loss_function(reconst, target_semantic, mu, log_var, M_N=self._kld_weight)
+                loss = self._model.loss_function(
+                    reconst, target_semantic, mu, log_var, M_N=self._kld_weight)
 
                 running_loss += loss['loss'].item()
                 running_seg_loss += loss['Reconstruction_Loss']
                 running_kld_loss += loss['KLD']
                 nb_samples += state.shape[0]
-                correct += (reconst.argmax(dim=1) == target_semantic).sum().item() / reconst.shape[-1] / reconst.shape[-2]
-        
+                correct += (reconst.argmax(dim=1) == target_semantic).sum().item() / \
+                    reconst.shape[-1] / reconst.shape[-2]
+
         running_loss /= nb_samples
         correct /= nb_samples
 
@@ -150,7 +156,8 @@ class VAETrainer(object):
             self.save(self._current_train_step, name="best_vae.pt")
 
         self._current_eval_step += 1
-        self.eval_log(running_loss, correct, running_seg_loss, running_kld_loss)
+        self.eval_log(running_loss, correct,
+                      running_seg_loss, running_kld_loss)
 
     def test(self):
         random_idx = np.random.randint(0, self._eval_size)
@@ -161,16 +168,18 @@ class VAETrainer(object):
             reconst = self._model(obs)[0].argmax(dim=1)
         reconst = reconst.squeeze(dim=0).cpu().numpy()
         semantic = semantic.squeeze(dim=0).cpu().numpy()
-        plt.imsave(f"{self._images_dir}/real_{self._current_train_step}.png", semantic, vmin=0, vmax=6)
-        plt.imsave(f"{self._images_dir}/pred_{self._current_train_step}.png", reconst, vmin=0, vmax=6)
-    
+        plt.imsave(
+            f"{self._images_dir}/real_{self._current_train_step}.png", semantic, vmin=0, vmax=6)
+        plt.imsave(
+            f"{self._images_dir}/pred_{self._current_train_step}.png", reconst, vmin=0, vmax=6)
+
     def save(self, epoch, name="checkpoint_vae.pt"):
         torch.save({
             "epoch": epoch,
             "model": self._model.state_dict(),
             "optimizer": self._optimizer.state_dict(),
         }, f"{self._checkpoint_dir}/{name}")
-    
+
     def load(self, mode='eval'):
         checkpoint = torch.load(self._checkpoint_dir)
         self._model.load_state_dict(checkpoint["model_state_dict"])
@@ -183,33 +192,38 @@ class VAETrainer(object):
             raise AttributeError()
         return checkpoint["epoch"]
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Settings for VAE training",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # VAE Config
     vae_config = parser.add_argument_group("VAE config")
     vae_config.add_argument('-lr', '--learning-rate', default=0.001, type=float,
-            help='Learning Rate')
+                            help='Learning Rate')
     vae_config.add_argument('-ls', '--latent-space', default=2048, type=int,
-            help='Latent space')
+                            help='Latent space')
     vae_config.add_argument('-kldw', '--kld-weight', default=1, type=float,
-            help='Kullback Divergence loss weight')
+                            help='Kullback Divergence loss weight')
     vae_config.add_argument('-L', '--loss', default='dice', type=str,
-            help='Loss function, can be "dice", "focal" or "weighted"')
+                            help='Loss function, can be "dice", "focal" or "weighted"')
+    vae_config.add_argument('-B', '--backbone', default='efficientnet_l2', type=str,
+                            help='VAE encoder backbone')
+    vae_config.add_argument('-OB', '--out-backbone-dims', default=512, type=int,
+                            help='Dimensions of output of backbone')
 
     # Training Config
     train_config = parser.add_argument_group("Training config")
     train_config.add_argument('-D', '--data', required=True, type=str,
-                        help='Path to data folder')
+                              help='Path to data folder')
     train_config.add_argument('-E', '--epochs', default=20,
-                        type=int, help='Training epochs')
+                              type=int, help='Training epochs')
     train_config.add_argument('-BS', '--batch-size', default=128,
-                        type=int, help='Batch size')
+                              type=int, help='Batch size')
     train_config.add_argument('-TTS', '--train-test-split', default=0.1,
-                        type=float, help='Percentage of dataset that goes to eval dataset (between 0 and 1)')
+                              type=float, help='Percentage of dataset that goes to eval dataset (between 0 and 1)')
     train_config.add_argument('-EF', '--eval-frequency', default=1,
-                        type=int, help='Eval every this number of epochs')
-    
+                              type=int, help='Eval every this number of epochs')
+
     args = parser.parse_args()
 
     torch.cuda.empty_cache()
@@ -227,10 +241,13 @@ if __name__ == "__main__":
     elif args.loss == 'focal':
         loss = FocalLoss()
     elif args.loss == 'weighted':
-        loss = WeightedPixelWiseNLLoss({0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1})
+        loss = WeightedPixelWiseNLLoss(
+            {0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1})
     else:
         raise NotImplementedError()
-    model = VanillaVAE(args.latent_space, loss=loss).to(device)
+    # model = VanillaVAE(args.latent_space, loss=loss).to(device)
+    model = VAEBackbone(args.latent_space, loss=loss, backbone=args.backbone,
+                        out_backbone=args.out_backbone_dims).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
     # scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     print(colored("[+] Model and optimizer are ready!", "green"))
@@ -249,5 +266,6 @@ if __name__ == "__main__":
         'seg_dice_background': lambda p, t: DiceCoefficient(p, t, only_consider=5),
     }
 
-    trainer = VAETrainer(model, optimizer, dataset, args.epochs, args.batch_size, args.train_test_split, args.eval_frequency, device=device, kld_weight=args.kld_weight, metrics=metrics)
+    trainer = VAETrainer(model, optimizer, dataset, args.epochs, args.batch_size, args.train_test_split,
+                         args.eval_frequency, device=device, kld_weight=args.kld_weight, metrics=metrics)
     trainer.train()
