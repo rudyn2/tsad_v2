@@ -125,27 +125,27 @@ class FullyConnectedQFunction(nn.Module):
 
 class FullyConnectedQFunctionHLC(nn.Module):
 
-    def __init__(self, observation_dim, action_dim, arch='256-256', nb_hlc=4):
+    def __init__(self, observation_dim, action_dim, arch='256-256', hlcs=(0, 1, 2, 3)):
         super().__init__()
         self.observation_dim = observation_dim
         self.action_dim = action_dim
         self.arch = arch
-        self.nb_hlc = nb_hlc
-        self.networks = nn.ModuleList([FullyConnectedNetwork(
+        self.hlcs = hlcs
+        self.networks = nn.ModuleDict({str(hlc): FullyConnectedNetwork(
             observation_dim + action_dim, 1, arch
-        ) for _ in range(nb_hlc)])
+        ) for hlc in hlcs})
 
     def forward(self, observations, actions, hlc):
         input_tensor = torch.cat([observations, actions], dim=1)
         output = []
         indices_array = []
-        for i in range(self.nb_hlc):
+        for i in self.hlcs:
             mask = hlc == i
             if len(mask.shape) == 0:
                 mask = mask.view(-1)
             indices = torch.nonzero(mask)
             filtered_input = input_tensor[hlc == i]
-            predicted_q = torch.squeeze(self.networks[i](filtered_input), dim=1)
+            predicted_q = torch.squeeze(self.networks[str(i)](filtered_input), dim=1)
             output.append(predicted_q)
             indices_array.append(indices)
         output = torch.cat(output, dim=0)
@@ -220,27 +220,27 @@ class FullyConnectedTanhPolicy(nn.Module):
         return output
 
 class FullyConnectedTanhPolicyHLC(nn.Module):
-    def __init__(self, observation_dim, action_dim, arch='256-256', nb_hlc=4):
+    def __init__(self, observation_dim, action_dim, arch='256-256', hlcs=(0, 1, 2, 3)):
         super().__init__()
         self.observation_dim = observation_dim
         self.action_dim = action_dim
         self.arch = arch
-        self.nb_hlc = nb_hlc
-        self.networks = nn.ModuleList([FullyConnectedNetwork(
+        self.hlcs = hlcs
+        self.networks = nn.ModuleDict({str(hlc): FullyConnectedNetwork(
             observation_dim, action_dim, arch
-        ) for _ in range(nb_hlc)])
+        ) for hlc in hlcs})
 
     # deterministic parameter just for compatibility
     def forward(self, observation, hlc, deterministic=True):
         output = []
         indices_array = []
-        for i in range(self.nb_hlc):
+        for i in self.hlcs:
             mask = hlc == i
             if len(mask.shape) == 0:
                 mask = mask.view(-1)
             indices = torch.nonzero(mask)
             filtered_observation = observation[mask]
-            prediction = self.networks[i](filtered_observation)
+            prediction = self.networks[str(i)](filtered_observation)
             prediction = torch.tanh(prediction)
             output.append(prediction)
             indices_array.append(indices)

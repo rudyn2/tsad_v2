@@ -15,7 +15,7 @@ from src.utils.sampler import StepSampler, TrajSampler
 from src.utils.utils import Timer, set_random_seed, prefix_metrics
 from src.utils.utils import WandBLogger
 
-NB_HLC = 4
+HLCS = (3, )
 ENV_PARAMS = {
     # carla connection parameters+
     'host': 'localhost',
@@ -68,16 +68,16 @@ def main(variant):
         action_low, action_max = -2, 2
         env = gym.make(variant["env"])
 
-    train_sampler = StepSampler(env, wandb_config["max_traj_length"])
-    eval_sampler = TrajSampler(env, wandb_config["max_traj_length"])
+    train_sampler = StepSampler(env, HLCS, wandb_config["max_traj_length"])
+    eval_sampler = TrajSampler(env, HLCS, wandb_config["max_traj_length"])
 
-    replay_buffer = ReplayBufferHLC(wandb_config["replay_buffer_size"], nb_hlc=NB_HLC)
+    replay_buffer = ReplayBufferHLC(wandb_config["replay_buffer_size"], hlcs=HLCS)
 
     policy = FullyConnectedTanhPolicyHLC(
         train_sampler.env.observation_space.shape[0],
         train_sampler.env.action_space.shape[0],
         wandb_config["policy_arch"],
-        nb_hlc=NB_HLC,
+        hlcs=HLCS,
     )
     target_policy = deepcopy(policy)
 
@@ -85,7 +85,7 @@ def main(variant):
         train_sampler.env.observation_space.shape[0],
         train_sampler.env.action_space.shape[0],
         wandb_config["qf_arch"],
-        nb_hlc=NB_HLC,
+        hlcs=HLCS,
     )
     target_qf1 = deepcopy(qf1)
 
@@ -215,7 +215,7 @@ if __name__ == "__main__":
     variant["policy_arch"] = args.policy_arch
     variant["qf_arch"] = args.policy_arch           # CHANGE THIS TO QF_ARCH
 
-    # update sac parameters
+    # update ddpg parameters
     variant["ddpg"]["discount"] = args.discount
     variant["ddpg"]["reward_scale"] = args.reward_scale
     variant["ddpg"]["policy_lr"] = args.policy_lr

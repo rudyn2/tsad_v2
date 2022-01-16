@@ -9,9 +9,10 @@ def _preprocess_observation(obs):
 
 class StepSampler(object):
 
-    def __init__(self, env, max_traj_length=1000):
+    def __init__(self, env, allowed_hlcs, max_traj_length=1000):
         self.max_traj_length = max_traj_length
         self._env = env
+        self.allowed_hlcs = allowed_hlcs
         self._traj_steps = 0
         self._current_observation, self._current_hlc = _preprocess_observation(self.env.reset())
 
@@ -31,6 +32,11 @@ class StepSampler(object):
             
             next_observation, reward, done, _ = self.env.step(action)
             next_observation, next_hlc = _preprocess_observation(next_observation)
+
+            if next_hlc not in self.allowed_hlcs:
+                self._traj_steps = 0
+                self._current_observation, self._current_hlc = _preprocess_observation(self.env.reset())
+                break
 
             observations.append(observation)
             actions.append(action)
@@ -67,8 +73,9 @@ class StepSampler(object):
 
 class TrajSampler(object):
 
-    def __init__(self, env, max_traj_length=1000):
+    def __init__(self, env, allowed_hlcs, max_traj_length=1000):
         self.max_traj_length = max_traj_length
+        self._allowed_hlcs = allowed_hlcs
         self._env = env
 
     def sample(self, policy, n_trajs, deterministic=False, replay_buffer=None, verbose=False, draw_waypoints=False):
@@ -108,6 +115,9 @@ class TrajSampler(object):
                                                           persistent_lines=True)
 
                 next_observation, next_hlc = _preprocess_observation(next_observation)
+
+                if next_hlc not in self._allowed_hlcs:
+                    break
 
                 observations.append(observation)
                 actions.append(action)

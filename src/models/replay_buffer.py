@@ -87,16 +87,16 @@ class ReplayBuffer(object):
 
 
 class ReplayBufferHLC(object):
-    def __init__(self, max_size, nb_hlc=4):
-        self._buffers = [ReplayBuffer(max_size) for _ in range(nb_hlc)]
-        self._nb_hlc = nb_hlc
-        self._total_steps = np.sum([buffer.total_steps for buffer in self._buffers])
+    def __init__(self, max_size, hlcs=(0, 1, 2, 3)):
+        self._buffers = {str(hlc): ReplayBuffer(max_size) for hlc in hlcs}
+        self._hlcs = hlcs
+        self._total_steps = np.sum([buffer.total_steps for buffer in self._buffers.values()])
 
     def __len__(self):
-        return np.sum([len(buffer) for buffer in self._buffers])
+        return np.sum([len(buffer) for buffer in self._buffers.values()])
 
     def add_sample(self, observation, action, reward, next_observation, done, hlc):
-        self._buffers[hlc].add_sample(
+        self._buffers[str(hlc)].add_sample(
                 observation,
                 action,
                 reward,
@@ -106,7 +106,7 @@ class ReplayBufferHLC(object):
             )
         
     def add_traj(self, observations, actions, rewards, next_observations, dones, hlcs):
-        for i, buffer in enumerate(self._buffers):
+        for i, buffer in self._buffers.items():
             f_observations = observations[hlcs == i]
             f_actions = actions[hlcs == i]
             f_rewards = rewards[hlcs == i]
@@ -124,7 +124,7 @@ class ReplayBufferHLC(object):
     
     def sample(self, batch_size):
         samples = {}
-        for buffer in self._buffers:
+        for buffer in self._buffers.values():
             for key, value in buffer.sample(batch_size).items():
                 if key not in samples or len(samples[key].shape) == 0 or samples[key].shape[0] == 0:
                     samples[key] = value
