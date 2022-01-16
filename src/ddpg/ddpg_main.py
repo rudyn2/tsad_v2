@@ -132,7 +132,7 @@ def main(variant):
         sys.stdout.write("\r")
         with Timer() as eval_timer:
             metrics["average_weighted_return"] = 0
-            if epoch == 0 or (epoch + 1) % wandb_config["eval_period"] == 0:
+            if epoch > 0 and (epoch + 1) % wandb_config["eval_period"] == 0:
                 trajs, info = eval_sampler.sample(
                     sampler_policy, wandb_config["eval_n_trajs"], deterministic=True
                 )
