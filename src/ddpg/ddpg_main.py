@@ -5,40 +5,42 @@ import argparse
 import numpy as np
 import carla
 import gym
+import torch
 from gym_carla.envs.carla_env import CarlaEnv
 from gym_carla.envs.carla_pid_env import CarlaPidEnv
 
 from ddpg import DDPG
-from src.models.replay_buffer import ReplayBuffer, batch_to_torch
-from src.models.model import FullyConnectedQFunction, DDPGSamplerPolicy, FullyConnectedTanhPolicy
+from src.models.replay_buffer import ReplayBufferHLC, batch_to_torch
+from src.models.model import DDPGSamplerPolicy, FullyConnectedTanhPolicyHLC, FullyConnectedQFunctionHLC
 from src.utils.sampler import StepSampler, TrajSampler
 from src.utils.utils import Timer, set_random_seed, prefix_metrics
 from src.utils.utils import WandBLogger
 
-
+HLCS = (3, )
 ENV_PARAMS = {
-            # carla connection parameters+
-            'host': 'localhost',
-            'port': 2000,  # connection port
-            'town': 'Town01',  # which town to simulate
-            'traffic_manager_port': 8000,
+    # carla connection parameters+
+    'host': 'localhost',
+    'port': 2000,  # connection port
+    'town': 'Town01',  # which town to simulate
+    'traffic_manager_port': 8000,
 
-            # simulation parameters
-            'verbose': False,
-            'vehicles': 50,  # number of vehicles in the simulation
-            'walkers': 10,  # number of walkers in the simulation
-            'obs_size': 224,  # sensor width and height
-            'max_past_step': 1,  # the number of past steps to draw
-            'dt': 0.025,  # time interval between two frames
-            'normalized_input': True,
-            'max_time_episode': 800,  # maximum timesteps per episode
-            'max_waypt': 12,  # maximum number of waypoints
-            'd_behind': 10,  # distance behind the ego vehicle (meter)
-            'out_lane_thres': 2.0,  # threshold for out of lane
-            'desired_speed': 6,  # desired speed (m/s)
-            'speed_reduction_at_intersection': 0.75,
-            'max_ego_spawn_times': 200,  # maximum times to spawn ego vehicle
-        }
+    # simulation parameters
+    'verbose': False,
+    'vehicles': 50,  # number of vehicles in the simulation
+    'walkers': 10,  # number of walkers in the simulation
+    'obs_size': 224,  # sensor width and height
+    'max_past_step': 1,  # the number of past steps to draw
+    'dt': 0.025,  # time interval between two frames
+    'normalized_input': True,
+    'max_time_episode': 800,  # maximum timesteps per episode
+    'max_waypt': 12,  # maximum number of waypoints
+    'd_behind': 10,  # distance behind the ego vehicle (meter)
+    'out_lane_thres': 2.0,  # threshold for out of lane
+    'desired_speed': 6,  # desired speed (m/s)
+    'speed_reduction_at_intersection': 0.75,
+    'max_ego_spawn_times': 200,  # maximum times to spawn ego vehicle
+    'reward_weights': [0.3, 0.3, 0.3],
+}
 
 
 def main(variant):
@@ -67,23 +69,33 @@ def main(variant):
         action_low, action_max = -2, 2
         env = gym.make(variant["env"])
 
-    train_sampler = StepSampler(env, wandb_config["max_traj_length"])
-    eval_sampler = TrajSampler(env, wandb_config["max_traj_length"])
+    train_sampler = StepSampler(env, HLCS, wandb_config["max_traj_length"])
+    eval_sampler = TrajSampler(env, HLCS, wandb_config["max_traj_length"])
 
-    replay_buffer = ReplayBuffer(wandb_config["replay_buffer_size"])
+    replay_buffer = ReplayBufferHLC(wandb_config["replay_buffer_size"], hlcs=HLCS)
 
-    policy = FullyConnectedTanhPolicy(
+    policy = FullyConnectedTanhPolicyHLC(
         train_sampler.env.observation_space.shape[0],
         train_sampler.env.action_space.shape[0],
-        wandb_config["policy_arch"]
+        wandb_config["policy_arch"],
+        hlcs=HLCS,
     )
+
+    if wandb_config['policy_checkpoint'] != "":
+        policy.load_state_dict(torch.load(wandb_config["policy_checkpoint"]))
+        policy.transfer_learning()
+
     target_policy = deepcopy(policy)
 
-    qf1 = FullyConnectedQFunction(
+    qf1 = FullyConnectedQFunctionHLC(
         train_sampler.env.observation_space.shape[0],
         train_sampler.env.action_space.shape[0],
-        wandb_config["qf_arch"]
+        wandb_config["qf_arch"],
+        hlcs=HLCS,
     )
+    if wandb_config['qf_checkpoint'] != "":
+        qf1.load_state_dict(torch.load(wandb_config["qf_checkpoint"]))
+        qf1.transfer_learning()
     target_qf1 = deepcopy(qf1)
 
     ddpg = DDPG(wandb_config["ddpg"], policy, target_policy, qf1, target_qf1)
@@ -129,7 +141,7 @@ def main(variant):
         sys.stdout.write("\r")
         with Timer() as eval_timer:
             metrics["average_weighted_return"] = 0
-            if epoch == 0 or (epoch + 1) % wandb_config["eval_period"] == 0:
+            if epoch > 0 and (epoch + 1) % wandb_config["eval_period"] == 0:
                 trajs, info = eval_sampler.sample(
                     sampler_policy, wandb_config["eval_n_trajs"], deterministic=True
                 )
@@ -169,10 +181,6 @@ if __name__ == "__main__":
         replay_buffer_size=1000000,
         seed=42,
         device='cuda',
-        env='carla-pid',    # carla-pid, carla-normal, Pendulum-v0
-
-        policy_arch='256-256-256',
-        qf_arch='256-256-256',
 
         n_epochs=200,
         n_env_steps_per_epoch=1000,
@@ -194,6 +202,9 @@ if __name__ == "__main__":
     parser.add_argument("--policy_arch", type=str, default="256-256")
     parser.add_argument("--qf_arch", type=str, default="256-256")
 
+    parser.add_argument("--policy_checkpoint", type=str, default="")
+    parser.add_argument("--qf_checkpoint", type=str, default="")
+
     parser.add_argument("--discount", type=float, default=0.99)
     parser.add_argument("--noise_max_steps", type=int, default=100000)
     parser.add_argument("--reward_scale", type=float, default=1)
@@ -211,8 +222,10 @@ if __name__ == "__main__":
     variant["n_epochs"] = args.n_epochs
     variant["policy_arch"] = args.policy_arch
     variant["qf_arch"] = args.policy_arch           # CHANGE THIS TO QF_ARCH
+    variant["policy_checkpoint"] = args.policy_checkpoint
+    variant["qf_checkpoint"] = args.qf_checkpoint
 
-    # update sac parameters
+    # update ddpg parameters
     variant["ddpg"]["discount"] = args.discount
     variant["ddpg"]["reward_scale"] = args.reward_scale
     variant["ddpg"]["policy_lr"] = args.policy_lr
