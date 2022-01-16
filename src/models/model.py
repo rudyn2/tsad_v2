@@ -156,6 +156,15 @@ class FullyConnectedQFunctionHLC(nn.Module):
         output = output[inv_indices]
         return output
 
+    def transfer_learning(self, from_hlc: int = 3, to_hlcs: tuple = (0, 1, 2)):
+        if from_hlc in self.hlcs:
+            for hlc in to_hlcs:
+                if hlc in self.hlcs:
+                    self.networks[str(hlc)].load_state_dict(self.networks[str(from_hlc)].state_dict())
+                    print(f"Transferred from {from_hlc} to {hlc}")
+        else:
+            print("Origin network is not present in the policy.")
+
 
 class Scalar(nn.Module):
     def __init__(self, init_value):
@@ -219,6 +228,7 @@ class FullyConnectedTanhPolicy(nn.Module):
         output = torch.tanh(output)
         return output
 
+
 class FullyConnectedTanhPolicyHLC(nn.Module):
     def __init__(self, observation_dim, action_dim, arch='256-256', hlcs=(0, 1, 2, 3)):
         super().__init__()
@@ -251,3 +261,12 @@ class FullyConnectedTanhPolicyHLC(nn.Module):
         # reorder output as input
         output = output[inv_indices]
         return output
+
+    def transfer_learning(self, from_hlc: int = 3, to_hlcs: tuple = (0, 1, 2)):
+        if from_hlc in self.hlcs:
+            for hlc in to_hlcs:
+                if hlc in self.hlcs:
+                    self.networks[str(hlc)].load_state_dict(self.networks[str(from_hlc)].state_dict())
+                    print(f"Transferred from {from_hlc} to {hlc}")
+        else:
+            print("Origin network is not present in the policy.")

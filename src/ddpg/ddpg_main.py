@@ -5,6 +5,7 @@ import argparse
 import numpy as np
 import carla
 import gym
+import torch
 from gym_carla.envs.carla_env import CarlaEnv
 from gym_carla.envs.carla_pid_env import CarlaPidEnv
 
@@ -79,6 +80,11 @@ def main(variant):
         wandb_config["policy_arch"],
         hlcs=HLCS,
     )
+
+    if wandb_config['policy_checkpoint'] != "":
+        policy.load_state_dict(torch.load(wandb_config["policy_checkpoint"]))
+        policy.transfer_learning()
+
     target_policy = deepcopy(policy)
 
     qf1 = FullyConnectedQFunctionHLC(
@@ -87,6 +93,9 @@ def main(variant):
         wandb_config["qf_arch"],
         hlcs=HLCS,
     )
+    if wandb_config['qf_checkpoint'] != "":
+        qf1.load_state_dict(torch.load(wandb_config["qf_checkpoint"]))
+        qf1.transfer_learning()
     target_qf1 = deepcopy(qf1)
 
     ddpg = DDPG(wandb_config["ddpg"], policy, target_policy, qf1, target_qf1)
@@ -172,10 +181,6 @@ if __name__ == "__main__":
         replay_buffer_size=1000000,
         seed=42,
         device='cuda',
-        env='carla-pid',    # carla-pid, carla-normal, Pendulum-v0
-
-        policy_arch='256-256-256',
-        qf_arch='256-256-256',
 
         n_epochs=200,
         n_env_steps_per_epoch=1000,
@@ -197,6 +202,9 @@ if __name__ == "__main__":
     parser.add_argument("--policy_arch", type=str, default="256-256")
     parser.add_argument("--qf_arch", type=str, default="256-256")
 
+    parser.add_argument("--policy_checkpoint", type=str, default="")
+    parser.add_argument("--qf_checkpoint", type=str, default="")
+
     parser.add_argument("--discount", type=float, default=0.99)
     parser.add_argument("--noise_max_steps", type=int, default=100000)
     parser.add_argument("--reward_scale", type=float, default=1)
@@ -214,6 +222,8 @@ if __name__ == "__main__":
     variant["n_epochs"] = args.n_epochs
     variant["policy_arch"] = args.policy_arch
     variant["qf_arch"] = args.policy_arch           # CHANGE THIS TO QF_ARCH
+    variant["policy_checkpoint"] = args.policy_checkpoint
+    variant["qf_checkpoint"] = args.qf_checkpoint
 
     # update ddpg parameters
     variant["ddpg"]["discount"] = args.discount

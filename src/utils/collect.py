@@ -150,7 +150,7 @@ def main(args):
                 target_transform = carla.Transform(carla.Location(x=float(info['waypoints'][2][0]),
                                                                   y=float(info['waypoints'][2][1]),
                                                                   z=0.0))
-                hlc_plus_1 =  int(info['road_option'].value)
+                hlc_plus_1 = int(info['road_option'].value)
                 ego_info = ego_agent.run_step_with_planner(target_transform, hlc_plus_1)
                 control = ego_info["control"]
 
@@ -216,7 +216,7 @@ if __name__ == '__main__':
     parser.add_argument('-ve', '--vehicles', default=100, type=int,
                         help="number of vehicles to spawn in the simulation")
     parser.add_argument('-wa', '--walkers', default=50, type=int, help="number of walkers to spawn in the simulation")
-    parser.add_argument('--skip-frames', default=25, type=int)
+    parser.add_argument('--skip-frames', default=20, type=int)
     parser.add_argument('--noise', action="store_true")
     parser.add_argument('--debug', action="store_true")
 
