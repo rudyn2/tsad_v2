@@ -3,6 +3,8 @@ from typing import Optional
 import numpy as np
 import torch
 import torch.nn as nn
+from torch import Tensor
+from typing import Tuple, Dict
 import torch.nn.functional as F
 
 
@@ -256,3 +258,36 @@ class DiceLoss(nn.Module):
 
         dice_score = 2. * intersection / (cardinality + self.eps)
         return torch.mean(1. - dice_score)
+
+class ADLoss(nn.Module):
+    def __init__(self,
+                 seg_loss: str):
+        """
+        @param seg_loss: Type of segmentation loss.
+        @param device: Device used for loss calculation. Expected: cpu or cuda.
+
+
+        """
+        super(ADLoss, self).__init__()
+        if seg_loss == 'dice':
+            self._seg_loss = DiceLoss()
+        elif seg_loss == 'wnll':
+            weights = {
+                0: 25,
+                1: 15,
+                2: 10,
+                3: 10,
+                4: 10,
+                5: 1,
+                6: 25
+            }
+            sum_weights = sum(weights.values())
+            # normalize weights
+            for k, v in weights.items():
+                weights[k] = v/sum_weights
+            self._seg_loss = WeightedPixelWiseNLLoss(weights)
+        else:
+            self._seg_loss = FocalLoss()
+
+    def __call__(self, prediction: Dict[str, Tensor], target: Dict[str, Tensor]) -> Dict[str, torch.FloatTensor]:
+        return self._seg_loss(prediction, target)

@@ -188,6 +188,9 @@ class OutputConv(nn.Module):
 
 
 class VAEBackbone(BaseVAE):
+
+    num_iter = 0 # Global static variable to keep track of iterations
+
     def __init__(self,
                  latent_dim: int,
                  num_clases: int = 6,
@@ -195,8 +198,20 @@ class VAEBackbone(BaseVAE):
                  loss=None,
                  backbone: str = 'efficientnet_l2',
                  out_backbone: int = 512,
+                 beta: int = 4,
+                 gamma: float = 1000.,
+                 max_capacity: int = 25,
+                 Capacity_max_iter: int = 1e5,
+                 loss_type: str = 'B',
                  **kwargs) -> None:
         super(VAEBackbone, self).__init__()
+
+        self.beta = beta
+        self.gamma = gamma
+        self.loss_type = loss_type
+        self.C_max = torch.Tensor([max_capacity])
+        self.C_stop_iter = Capacity_max_iter
+
         self.out_backbone = out_backbone
         self.pred_dims = out_backbone*(4 * 4)
         self.latent_dim = latent_dim
@@ -211,7 +226,8 @@ class VAEBackbone(BaseVAE):
         self.fc_var = nn.Linear(self.pred_dims, latent_dim)
 
         # self.decoder = BasicDecoder(latent_dim, num_clases)
-        self.decoder = ImageSegmentationBranch(out_backbone, num_clases, latent_dim=latent_dim)
+        self.decoder = ImageSegmentationBranch(
+            out_backbone, num_clases, latent_dim=latent_dim)
 
     def encode(self, input: Tensor) -> "list[Tensor]":
         result = self.encoder(input)
@@ -242,6 +258,8 @@ class VAEBackbone(BaseVAE):
                       mu,
                       log_var,
                       **kwargs) -> dict:
+        self.num_iter += 1
+        
         if not 'M_N' in kwargs.keys():
             kld_weight = 1
         else:
@@ -252,7 +270,17 @@ class VAEBackbone(BaseVAE):
         kld_loss = torch.mean(-0.5 * torch.sum(1 +
                               log_var - mu ** 2 - log_var.exp(), dim=1), dim=0)
 
-        loss = recons_loss + kld_weight * kld_loss
+        if self.loss_type == 'H':  # https://openreview.net/forum?id=Sy2fzU9gl
+            loss = recons_loss + self.beta * kld_weight * kld_loss
+        elif self.loss_type == 'B':  # https://arxiv.org/pdf/1804.03599.pdf
+            self.C_max = self.C_max.to(target.device)
+            C = torch.clamp(self.C_max / self.C_stop_iter *
+                            self.num_iter, 0, self.C_max.data[0])
+            loss = recons_loss + self.gamma * kld_weight * (kld_loss - C).abs()
+        elif self.loss_type == 'V':
+            loss = reconst + kld_weight * kld_loss
+        else:
+            raise ValueError('Undefined loss type.')
         return {'loss': loss, 'Reconstruction_Loss': recons_loss.detach(), 'KLD': -kld_loss.detach()}
 
     def sample(self,

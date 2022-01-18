@@ -1,5 +1,5 @@
 from utils import DiceCoefficient, iou_pytorch
-from losses import DiceLoss, FocalLoss, WeightedPixelWiseNLLoss
+from losses import ADLoss
 from termcolor import colored
 from vae_backbone import VAEBackbone
 from vae import VanillaVAE
@@ -204,9 +204,9 @@ if __name__ == "__main__":
                             help='Latent space')
     vae_config.add_argument('-kldw', '--kld-weight', default=1, type=float,
                             help='Kullback Divergence loss weight')
-    vae_config.add_argument('-L', '--loss', default='dice', type=str,
+    vae_config.add_argument('-L', '--loss', default='focal', type=str,
                             help='Loss function, can be "dice", "focal" or "weighted"')
-    vae_config.add_argument('-B', '--backbone', default='efficientnet_l2', type=str,
+    vae_config.add_argument('-B', '--backbone', default='efficientnet_b5', type=str,
                             help='VAE encoder backbone')
     vae_config.add_argument('-OB', '--out-backbone-dims', default=512, type=int,
                             help='Dimensions of output of backbone')
@@ -236,15 +236,7 @@ if __name__ == "__main__":
     config.args = args
 
     print(colored("[*] Initializing model, optimizer and loss", "white"))
-    if args.loss == 'dice':
-        loss = DiceLoss()
-    elif args.loss == 'focal':
-        loss = FocalLoss()
-    elif args.loss == 'weighted':
-        loss = WeightedPixelWiseNLLoss(
-            {0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1})
-    else:
-        raise NotImplementedError()
+    loss = ADLoss(args.loss)
     # model = VanillaVAE(args.latent_space, loss=loss).to(device)
     model = VAEBackbone(args.latent_space, loss=loss, backbone=args.backbone,
                         out_backbone=args.out_backbone_dims).to(device)
