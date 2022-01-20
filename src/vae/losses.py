@@ -96,7 +96,7 @@ class FocalLoss(nn.Module):
 
 
 class WeightedPixelWiseNLLoss(nn.Module):
-    def __init__(self, weights: dict):
+    def __init__(self, weights: dict, apply_nonlin=None):
         super(WeightedPixelWiseNLLoss, self).__init__()
         self.weights = weights
 
@@ -111,6 +111,9 @@ class WeightedPixelWiseNLLoss(nn.Module):
         :param logits: BxCxHxW
         :param target: Bx1xHxW
         """
+        if self.apply_nonlin is not None:
+            logits = self.apply_nonlin(logits)
+
         batch_size = logits.shape[0]
         # Calculate log probabilities
         logp = F.log_softmax(logits, dim=1)
@@ -285,9 +288,9 @@ class ADLoss(nn.Module):
             # normalize weights
             for k, v in weights.items():
                 weights[k] = v/sum_weights
-            self._seg_loss = WeightedPixelWiseNLLoss(weights)
+            self._seg_loss = WeightedPixelWiseNLLoss(weightsapply_nonlin=torch.exp)
         else:
-            self._seg_loss = FocalLoss()
+            self._seg_loss = FocalLoss(apply_nonlin=torch.exp)
 
     def __call__(self, prediction: Dict[str, Tensor], target: Dict[str, Tensor]) -> Dict[str, torch.FloatTensor]:
         return self._seg_loss(prediction, target)

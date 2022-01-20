@@ -200,11 +200,11 @@ if __name__ == "__main__":
     vae_config = parser.add_argument_group("VAE config")
     vae_config.add_argument('-lr', '--learning-rate', default=0.001, type=float,
                             help='Learning Rate')
-    vae_config.add_argument('-ls', '--latent-space', default=2048, type=int,
+    vae_config.add_argument('-ls', '--latent-space', default=512, type=int,
                             help='Latent space')
     vae_config.add_argument('-kldw', '--kld-weight', default=1, type=float,
                             help='Kullback Divergence loss weight')
-    vae_config.add_argument('-L', '--loss', default='focal', type=str,
+    vae_config.add_argument('-L', '--loss', default='dice', type=str,
                             help='Loss function, can be "dice", "focal" or "weighted"')
     vae_config.add_argument('-B', '--backbone', default='efficientnet_b5', type=str,
                             help='VAE encoder backbone')

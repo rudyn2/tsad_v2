@@ -51,5 +51,5 @@ RUN mkdir /home/$user_name/databases
 # RUN nohup /bin/bash -c "SDL_VIDEODRIVER=offscreen /home/carla/CarlaUE4.sh" &>/dev/null &
 # RUN nohup /bin/bash -c "SDL_VIDEODRIVER=offscreen /home/carla/CarlaUE4.sh -quality-level=low -world-port=2000 -benchmark -carla-server -carla-no-hud" &>/dev/null &
 # COPY . .
-RUN conda install pytorch==1.2.0 torchvision==0.4.0 cudatoolkit=10.0 -c pytorch
-RUN conda install pytorch==1.4.0
+# RUN conda install pytorch==1.2.0 torchvision==0.4.0 cudatoolkit=10.0 -c pytorch
+# RUN conda install pytorch==1.4.0
