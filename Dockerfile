@@ -32,6 +32,8 @@ RUN conda install numpy
 # COPY WHEELS AND INSTALL
 COPY wheels/gym_carla-0.1.0-py3-none-any.whl gym_carla-0.1.0-py3-none-any.whl
 RUN pip install gym_carla-0.1.0-py3-none-any.whl
+COPY wheels/lbc_agent-0.1.0-py3-none-any.whl lbc_agent-0.1.0-py3-none-any.whl
+RUN pip install lbc_agent-0.1.0-py3-none-any.whl
 
 RUN mkdir -p /home/$user_name/workspace
 ENV PYTHONPATH "${PYTHONPATH}:/home/$user_name/workspace"
