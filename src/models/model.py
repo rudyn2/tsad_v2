@@ -6,6 +6,7 @@ from torch.distributions.transformed_distribution import TransformedDistribution
 from src.utils.eps_scheduler import Epsilon
 from src.utils.transforms import TanhTransform
 
+
 class FullyConnectedNetwork(nn.Module):
 
     def __init__(self, input_dim, output_dim, arch='256-256'):
@@ -107,65 +108,6 @@ class SamplerPolicy(object):
         return actions
 
 
-class FullyConnectedQFunction(nn.Module):
-
-    def __init__(self, observation_dim, action_dim, arch='256-256'):
-        super().__init__()
-        self.observation_dim = observation_dim
-        self.action_dim = action_dim
-        self.arch = arch
-        self.network = FullyConnectedNetwork(
-            observation_dim + action_dim, 1, arch
-        )
-
-    def forward(self, observations, actions):
-        input_tensor = torch.cat([observations, actions], dim=1)
-        return torch.squeeze(self.network(input_tensor), dim=1)
-
-
-class FullyConnectedQFunctionHLC(nn.Module):
-
-    def __init__(self, observation_dim, action_dim, arch='256-256', hlcs=(0, 1, 2, 3)):
-        super().__init__()
-        self.observation_dim = observation_dim
-        self.action_dim = action_dim
-        self.arch = arch
-        self.hlcs = hlcs
-        self.networks = nn.ModuleDict({str(hlc): FullyConnectedNetwork(
-            observation_dim + action_dim, 1, arch
-        ) for hlc in hlcs})
-
-    def forward(self, observations, actions, hlc):
-        input_tensor = torch.cat([observations, actions], dim=1)
-        output = []
-        indices_array = []
-        for i in self.hlcs:
-            mask = hlc == i
-            if len(mask.shape) == 0:
-                mask = mask.view(-1)
-            indices = torch.nonzero(mask)
-            filtered_input = input_tensor[hlc == i]
-            predicted_q = torch.squeeze(self.networks[str(i)](filtered_input), dim=1)
-            output.append(predicted_q)
-            indices_array.append(indices)
-        output = torch.cat(output, dim=0)
-        indices_array = torch.cat(indices_array, dim=0).squeeze(dim=1)
-        # inverse indices array
-        _, inv_indices = torch.sort(indices_array)
-        # reorder output as input
-        output = output[inv_indices]
-        return output
-
-    def transfer_learning(self, from_hlc: int = 3, to_hlcs: tuple = (0, 1, 2)):
-        if from_hlc in self.hlcs:
-            for hlc in to_hlcs:
-                if hlc in self.hlcs:
-                    self.networks[str(hlc)].load_state_dict(self.networks[str(from_hlc)].state_dict())
-                    print(f"Transferred from {from_hlc} to {hlc}")
-        else:
-            print("Origin network is not present in the policy.")
-
-
 class Scalar(nn.Module):
     def __init__(self, init_value):
         super().__init__()
@@ -190,19 +132,12 @@ class DDPGSamplerPolicy(object):
     def __call__(self, observations, hlc, deterministic=False):
         with torch.no_grad():
             observations = torch.from_numpy(observations).float().to(self.device)
-            hlc = torch.tensor(
-                hlc, dtype=torch.int8, device=self.device
-            )
-            if len(hlc.shape) == 1 or len(hlc.shape) == 0:
-                hlc.view(1, 1)
-
             if len(observations.shape) == 1:
                 observations = observations.unsqueeze(0)
             actions = self.policy(observations, hlc, deterministic=deterministic)
             if not deterministic:
                 noise = torch.normal(0, self.eps_scheduler.step(), size=actions.shape, device=self.device)
                 actions = torch.clamp(actions + noise, self.action_low, self.action_max)
-
             if len(observations.shape) == 1 or observations.shape[0] == 1:
                 actions = actions.squeeze(0)
             actions = actions.cpu().numpy()
@@ -210,6 +145,47 @@ class DDPGSamplerPolicy(object):
 
     def get_epsilon(self):
         return self.eps_scheduler.epsilon()
+
+
+class FullyConnectedQFunction(nn.Module):
+
+    def __init__(self, observation_dim, action_dim, arch='256-256'):
+        super().__init__()
+        self.observation_dim = observation_dim
+        self.action_dim = action_dim
+        self.arch = arch
+        self.network = FullyConnectedNetwork(
+            observation_dim + action_dim, 1, arch
+        )
+
+    def forward(self, observations, actions):
+        input_tensor = torch.cat([observations, actions], dim=1)
+        return torch.squeeze(self.network(input_tensor), dim=1)
+
+
+class FullyConnectedQFunctionHLC(nn.Module):
+
+    def __init__(self, observation_dim, action_dim, arch='256-256', hlcs=(0, 1, 2, 3)):
+        super().__init__()
+        self.observation_dim = observation_dim
+        self.action_dim = action_dim
+        self.arch = arch
+        self.hlcs = hlcs
+        self.networks = nn.ModuleDict({str(hlc): FullyConnectedQFunction(observation_dim, action_dim, arch)
+                                       for hlc in hlcs})
+
+    def forward(self, observations, actions, hlc):
+        output = self.networks[str(hlc)](observations, actions)
+        return output
+
+    def transfer_learning(self, from_hlc: int = 3, to_hlcs: tuple = (0, 1, 2)):
+        if from_hlc in self.hlcs:
+            for hlc in to_hlcs:
+                if hlc in self.hlcs:
+                    self.networks[str(hlc)].load_state_dict(self.networks[str(from_hlc)].state_dict())
+                    print(f"Transferred from {from_hlc} to {hlc}")
+        else:
+            print("Origin network is not present in the policy.")
 
 
 class FullyConnectedTanhPolicy(nn.Module):
@@ -236,31 +212,14 @@ class FullyConnectedTanhPolicyHLC(nn.Module):
         self.action_dim = action_dim
         self.arch = arch
         self.hlcs = hlcs
-        self.networks = nn.ModuleDict({str(hlc): FullyConnectedNetwork(
+        self.networks = nn.ModuleDict({str(hlc): FullyConnectedTanhPolicy(
             observation_dim, action_dim, arch
         ) for hlc in hlcs})
 
     # deterministic parameter just for compatibility
     def forward(self, observation, hlc, deterministic=True):
-        output = []
-        indices_array = []
-        for i in self.hlcs:
-            mask = hlc == i
-            if len(mask.shape) == 0:
-                mask = mask.view(-1)
-            indices = torch.nonzero(mask)
-            filtered_observation = observation[mask]
-            prediction = self.networks[str(i)](filtered_observation)
-            prediction = torch.tanh(prediction)
-            output.append(prediction)
-            indices_array.append(indices)
-        output = torch.cat(output, dim=0)
-        indices_array = torch.cat(indices_array, dim=0).squeeze(dim=1)
-        # inverse indices array
-        _, inv_indices = torch.sort(indices_array)
-        # reorder output as input
-        output = output[inv_indices]
-        return output
+        prediction = self.networks[str(hlc)](observation)
+        return prediction
 
     def transfer_learning(self, from_hlc: int = 3, to_hlcs: tuple = (0, 1, 2)):
         if from_hlc in self.hlcs:

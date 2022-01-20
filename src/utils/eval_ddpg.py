@@ -6,12 +6,13 @@ import torch
 from sampler import TrajSampler
 from src.utils.utils import Timer
 from src.models.model import DDPGSamplerPolicy
-from src.models.model import FullyConnectedTanhPolicy
+from src.models.model import FullyConnectedTanhPolicyHLC
 from gym_carla.envs.carla_pid_env import CarlaPidEnv
 from gym_carla.envs.carla_env import CarlaEnv
 import numpy as np
 
 
+HLCS = (0, 1, 2, 3)
 ENV_PARAMS = {
             # carla connection parameters+
             'host': 'localhost',
@@ -27,7 +28,6 @@ ENV_PARAMS = {
             'max_past_step': 1,  # the number of past steps to draw
             'dt': 0.025,  # time interval between two frames
             'normalized_input': True,
-            'ego_vehicle_filter': 'vehicle.lincoln*',  # filter for defining ego vehicle
             'max_time_episode': 500,  # maximum timesteps per episode
             'max_waypt': 12,  # maximum number of waypoints
             'd_behind': 12,  # distance behind the ego vehicle (meter)
@@ -54,15 +54,17 @@ def main(eval_variant):
         })
         carla_env = CarlaEnv(env_params)
 
-    eval_sampler = TrajSampler(carla_env, eval_variant["max_traj_length"])
+    eval_sampler = TrajSampler(carla_env, (3, ), eval_variant["max_traj_length"])
 
-    policy = FullyConnectedTanhPolicy(
+    policy = FullyConnectedTanhPolicyHLC(
         carla_env.observation_space.shape[0],
         carla_env.action_space.shape[0],
-        eval_variant["policy_arch"]
+        eval_variant["policy_arch"],
+        hlcs=HLCS
     )
     policy.load_state_dict(torch.load(eval_variant["checkpoint"]))
     policy.to(eval_variant["device"])
+    policy.eval()
     sampler_policy = DDPGSamplerPolicy(policy, eval_variant["device"])
 
     metrics = {}
@@ -98,8 +100,8 @@ if __name__ == "__main__":
         device='cuda',
         act_mode='pid',
 
-        policy_arch='256-256',
-        qf_arch='256-256',
+        policy_arch='128-128-128',
+        qf_arch='128-128-128',
         eval_n_trajs=20,
         env_params=ENV_PARAMS
     )

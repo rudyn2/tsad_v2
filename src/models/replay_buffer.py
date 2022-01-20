@@ -3,11 +3,15 @@ import torch
 import random
 from collections import deque, namedtuple
 
+
 def batch_to_torch(batch, device):
     return {
-        k: torch.from_numpy(v).to(device=device, non_blocking=True)
-        for k, v in batch.items()
+        hlc: {
+            k: torch.from_numpy(v).to(device=device, non_blocking=True)
+            for k, v in hlc_batch.items()
+        } for hlc, hlc_batch in batch.items()
     }
+
 
 class ReplayBuffer(object):
     def __init__(self, max_size):
@@ -18,8 +22,7 @@ class ReplayBuffer(object):
             "next_observations": np.array([]),
             "actions": np.array([]),
             "rewards": np.array([]),
-            "dones": np.array([]),
-            "hlcs": np.array([]),
+            "dones": np.array([])
         }
         self._Transition = namedtuple(
             "Transition", tuple(self._empty_transition.keys())
@@ -37,30 +40,27 @@ class ReplayBuffer(object):
     def __len__(self):
         return len(self._memory)
 
-    def add_sample(self, observation, action, reward, next_observation, done, hlc):
+    def add_sample(self, observation, action, reward, next_observation, done):
         self.push(
-            np.array(observation, dtype=np.float32)[np.newaxis,:],
-            np.array(next_observation, dtype=np.float32)[np.newaxis,:],
-            np.array(action, dtype=np.float32)[np.newaxis,:],
+            np.array(observation, dtype=np.float32)[np.newaxis, :],
+            np.array(next_observation, dtype=np.float32)[np.newaxis, :],
+            np.array(action, dtype=np.float32)[np.newaxis, :],
             np.array([reward], dtype=np.float32),
-            np.array([done], dtype=np.float32),
-            np.array([hlc], dtype=np.float32),
+            np.array([done], dtype=np.float32)
         )
         self._total_steps += 1
 
-    def add_traj(self, observations, actions, rewards, next_observations, dones, hlcs):
-        for o, a, r, no, d, h in zip(observations, actions, rewards, next_observations, dones, hlcs):
-            self.add_sample(o, a, r, no, d, h)
+    def add_traj(self, observations, actions, rewards, next_observations, dones):
+        for o, a, r, no, d in zip(observations, actions, rewards, next_observations, dones):
+            self.add_sample(o, a, r, no, d)
 
     def sample(self, batch_size):
-        size = min(len(self), batch_size)
-        if size == 0:
-            sample = self._empty_transition
+        if len(self) < batch_size:
+            return self._empty_transition
         else:
-            sample = random.sample(self._memory, size)
+            sample = random.sample(self._memory, batch_size)
             sample = self._Transition(*zip(*sample))
-            sample = self._unpack(sample)
-        return sample
+            return self._unpack(sample)
     
     def _unpack(self, sample):
         unpacked = {}
@@ -101,10 +101,10 @@ class ReplayBufferHLC(object):
                 action,
                 reward,
                 next_observation,
-                done,
-                hlc,
+                done
             )
-        
+
+    # IS THIS METHOD DEPRECATED?
     def add_traj(self, observations, actions, rewards, next_observations, dones, hlcs):
         for i, buffer in self._buffers.items():
             f_observations = observations[hlcs == i]
@@ -123,15 +123,7 @@ class ReplayBufferHLC(object):
             )
     
     def sample(self, batch_size):
-        samples = {}
-        for buffer in self._buffers.values():
-            for key, value in buffer.sample(batch_size).items():
-                if key not in samples or len(samples[key].shape) == 0 or samples[key].shape[0] == 0:
-                    samples[key] = value
-                elif len(value.shape) > 0:
-                    # If key is already in dict and samples[key] has length and value has length
-                    samples[key] = np.concatenate((value, samples[key]), axis=0)
-        return samples
+        return {hlc: buffer.sample(batch_size) for hlc, buffer in self._buffers.items()}
 
     def torch_sample(self, batch_size, device):
         return batch_to_torch(self.sample(batch_size), device)
@@ -149,3 +141,18 @@ class ReplayBufferHLC(object):
     @property
     def total_steps(self):
         return self._total_steps
+
+
+if __name__ == "__main__":
+    # pseudo-test
+    buffer = ReplayBufferHLC(max_size=10000, hlcs=(0, 1, 2, 3))
+    for _ in range(500):
+        buffer.add_sample(
+            observation=np.random.rand(3),
+            action=np.random.rand(2),
+            reward=np.random.rand(),
+            next_observation=np.random.rand(3),
+            done=random.choice([True, False]),
+            hlc=random.choice([0, 1, 2, 3])
+        )
+    samples = buffer.sample(128)

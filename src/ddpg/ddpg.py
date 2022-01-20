@@ -54,7 +54,16 @@ class DDPG(object):
         soft_target_update(self.qf1, self.target_qf1, soft_target_update_rate)
         soft_target_update(self.policy, self.target_policy, soft_target_update_rate)
 
-    def train(self, batch):
+    def train_hlcs(self, batch):
+        metrics = {}
+        for hlc, hlc_batch in batch.items():
+            if hlc_batch['observations'].shape[0] > 0:
+                metrics[hlc] = self.train(hlc_batch, hlc)
+            else:
+                metrics[hlc] = None, None
+        return metrics
+
+    def train(self, batch, hlc):
         self._total_steps += 1
 
         observations = batch['observations']
@@ -62,13 +71,12 @@ class DDPG(object):
         rewards = batch['rewards']
         next_observations = batch['next_observations']
         dones = batch['dones']
-        hlcs = batch['hlcs']
 
         """ Q function loss """
         with torch.no_grad():
-            target_q_values = self.target_qf1(next_observations, self.target_policy(next_observations, hlcs), hlcs)
+            target_q_values = self.target_qf1(next_observations, self.target_policy(next_observations, hlc), hlc)
             q_target = self.config.reward_scale * rewards + (1. - dones) * self.config.discount * target_q_values
-        q1_pred = self.qf1(observations, actions, hlcs)
+        q1_pred = self.qf1(observations, actions, hlc)
         qf1_loss = F.mse_loss(q1_pred, q_target)
 
         self.qf_optimizer.zero_grad()
@@ -79,7 +87,7 @@ class DDPG(object):
         """ Policy loss """
         policy_loss = None
         if self._total_steps % self.config.policy_frequency == 0:
-            policy_loss = -self.qf1(observations, self.policy(observations, hlcs), hlcs).mean()
+            policy_loss = -self.qf1(observations, self.policy(observations, hlc), hlc).mean()
             self.policy_optimizer.zero_grad()
             policy_loss.backward()
             torch.nn.utils.clip_grad_norm_(list(self.policy.parameters()), self.config.max_grad_norm)

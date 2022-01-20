@@ -16,7 +16,8 @@ from src.utils.sampler import StepSampler, TrajSampler
 from src.utils.utils import Timer, set_random_seed, prefix_metrics
 from src.utils.utils import WandBLogger
 
-HLCS = (3, )
+HLCS = (0, 1, 2, 3)
+ALLOWED_HLCS = (0, 1, 2, 3)
 ENV_PARAMS = {
     # carla connection parameters+
     'host': 'localhost',
@@ -69,8 +70,8 @@ def main(variant):
         action_low, action_max = -2, 2
         env = gym.make(variant["env"])
 
-    train_sampler = StepSampler(env, HLCS, wandb_config["max_traj_length"])
-    eval_sampler = TrajSampler(env, HLCS, wandb_config["max_traj_length"])
+    train_sampler = StepSampler(env, ALLOWED_HLCS, wandb_config["max_traj_length"])
+    eval_sampler = TrajSampler(env, ALLOWED_HLCS, wandb_config["max_traj_length"])
 
     replay_buffer = ReplayBufferHLC(wandb_config["replay_buffer_size"], hlcs=HLCS)
 
@@ -130,18 +131,20 @@ def main(variant):
             for batch_idx in range(wandb_config["n_train_step_per_epoch"]):
                 batch = batch_to_torch(replay_buffer.sample(wandb_config["batch_size"]), wandb_config["device"])
                 if batch_idx + 1 == wandb_config["n_train_step_per_epoch"]:
-                    ddpg_metrics, batch_metrics = ddpg.train(batch)
-                    metrics.update(prefix_metrics(ddpg_metrics, 'ddpg'))
-                    metrics.update(prefix_metrics(batch_metrics, 'batch'))
+                    all_metrics = ddpg.train_hlcs(batch)
+                    for hlc, (ddpg_metrics,  batch_metrics) in all_metrics.items():
+                        if ddpg_metrics is not None and batch_metrics is not None:
+                            metrics.update(prefix_metrics(ddpg_metrics, f'ddpg/ddpg_{hlc}'))
+                            metrics.update(prefix_metrics(batch_metrics, f'batch/batch_{hlc}'))
                 else:
-                    ddpg.train(batch)
+                    ddpg.train_hlcs(batch)
 
         sys.stdout.flush()
         sys.stdout.write(f"evaluating epoch={epoch}".ljust(100))
         sys.stdout.write("\r")
         with Timer() as eval_timer:
             metrics["average_weighted_return"] = 0
-            if epoch > 0 and (epoch + 1) % wandb_config["eval_period"] == 0:
+            if epoch  >= 0 and (epoch + 1) % wandb_config["eval_period"] == 0:
                 trajs, info = eval_sampler.sample(
                     sampler_policy, wandb_config["eval_n_trajs"], deterministic=True
                 )
@@ -182,12 +185,12 @@ if __name__ == "__main__":
         seed=42,
         device='cuda',
 
-        n_epochs=200,
+        n_epochs=250,
         n_env_steps_per_epoch=1000,
         n_train_step_per_epoch=1000,
         eval_period=10,
         eval_n_trajs=5,
-        batch_size=256,
+        batch_size=32,
 
         ddpg=dict(DDPG.get_default_config()),
         logging=dict(WandBLogger.get_default_config()),
@@ -196,9 +199,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default="carla-pid")
-    parser.add_argument("--n_env_steps_per_epoch", type=int, default=1000)
-    parser.add_argument("--n_epochs", type=int, default=200)
-    parser.add_argument("--eval_period", type=int, default=10)
+    parser.add_argument("--n_env_steps_per_epoch", type=int, default=100)
+    parser.add_argument("--n_epochs", type=int, default=250)
+    parser.add_argument("--eval_period", type=int, default=1)
     parser.add_argument("--policy_arch", type=str, default="256-256")
     parser.add_argument("--qf_arch", type=str, default="256-256")
 
