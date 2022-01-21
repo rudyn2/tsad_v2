@@ -210,6 +210,8 @@ if __name__ == "__main__":
                             help='VAE encoder backbone')
     vae_config.add_argument('-OB', '--out-backbone-dims', default=512, type=int,
                             help='Dimensions of output of backbone')
+    vae_config.add_argument('-LT', '--loss-type', default='H', type=str,
+                            help='Reconstruction loss type, can be "H", "B" or "V')
 
     # Training Config
     train_config = parser.add_argument_group("Training config")
@@ -239,7 +241,7 @@ if __name__ == "__main__":
     loss = ADLoss(args.loss)
     # model = VanillaVAE(args.latent_space, loss=loss).to(device)
     model = VAEBackbone(args.latent_space, loss=loss, backbone=args.backbone,
-                        out_backbone=args.out_backbone_dims).to(device)
+                        out_backbone=args.out_backbone_dims, loss_type=args.loss_type).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
     # scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     print(colored("[+] Model and optimizer are ready!", "green"))

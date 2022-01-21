@@ -281,8 +281,6 @@ class VAEBackbone(BaseVAE):
             loss = reconst + kld_weight * kld_loss
         else:
             raise ValueError('Undefined loss type.')
-        print(f"{mu.sum()}\t{log_var.sum()}")
-        print(f"{loss}\t{recons_loss}\t{kld_loss}")
         return {'loss': loss, 'Reconstruction_Loss': recons_loss.detach(), 'KLD': -kld_loss.detach()}
 
     def sample(self,
