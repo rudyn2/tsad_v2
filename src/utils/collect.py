@@ -153,11 +153,18 @@ def main(args):
                 hlc_plus_1 = int(info['road_option'].value)
                 ego_info = ego_agent.run_step_with_planner(target_transform, hlc_plus_1)
                 control = ego_info["control"]
+                action = [control.throttle, control.brake, control.steer]
 
-                obs, r, done, info = env.step([control.throttle, control.brake, control.steer])
-
+                obs, r, done, info = env.step(action)
+                rl_info_ = info.copy()
+                rl_info_['road_option'] = rl_info_['road_option'].value
                 ego_info['control'] = parse_control(control)
-                rl_info = dict(obs=obs, reward=r, done=done, info=info, hlc=hlc_plus_1 - 1)
+                rl_info = dict(obs=obs["affordances"].tolist(),
+                               action=action,
+                               reward=r,
+                               done=done,
+                               info=rl_info_,
+                               hlc=hlc_plus_1 - 1)
                 ego_info['rl'] = rl_info
                 frames_count += 1
 
