@@ -10,14 +10,14 @@ from gym_carla.envs.carla_env import CarlaEnv
 from gym_carla.envs.carla_pid_env import CarlaPidEnv
 
 from ddpg import DDPG
-from src.models.replay_buffer import ReplayBufferHLC, batch_to_torch
+from src.models.replay_buffer import ReplayBufferHLC, batch_to_torch, BCDatasetHLC
 from src.models.model import DDPGSamplerPolicy, FullyConnectedTanhPolicyHLC, FullyConnectedQFunctionHLC
 from src.utils.sampler import StepSampler, TrajSampler
 from src.utils.utils import Timer, set_random_seed, prefix_metrics
 from src.utils.utils import WandBLogger
 
 HLCS = (0, 1, 2, 3)
-ALLOWED_HLCS = (0, 1, 2, 3)
+ALLOWED_HLCS = (3, )
 ENV_PARAMS = {
     # carla connection parameters+
     'host': 'localhost',
@@ -109,6 +109,14 @@ def main(variant):
                                        action_max=action_max)
 
     print("Training...")
+    if wandb_config["n_supervised"] > 0 and wandb_config["bc_data"] is not None:
+        # read bc dataset
+        bc_dataset = BCDatasetHLC(wandb_config["bc_data"], hlcs=ALLOWED_HLCS)
+        for epoch in range(wandb_config["n_supervised"]):
+            for hlc in ALLOWED_HLCS:
+                batch = batch_to_torch(bc_dataset.sample(wandb_config["batch_size"]))
+                ddpg.train_supervised(batch, hlc)
+
     max_return = 0
     for epoch in range(wandb_config['n_epochs']):
         metrics = {}
@@ -173,6 +181,9 @@ def main(variant):
             max_return = metrics["average_weighted_return"]
             wandb_logger.save_models(policy, target_qf1, tag='best')
         wandb_logger.log(metrics)
+
+        if epoch % 10 == 0:
+            wandb_logger.save_models(policy, target_qf1, tag=f'epoch_{epoch}')
     wandb_logger.save_models(policy, target_qf1, tag='last')
     print("Done!")
 
@@ -187,7 +198,7 @@ if __name__ == "__main__":
 
         n_epochs=250,
         n_env_steps_per_epoch=1000,
-        n_train_step_per_epoch=1000,
+        n_train_step_per_epoch=100,
         eval_period=10,
         eval_n_trajs=5,
         batch_size=32,
@@ -199,9 +210,10 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default="carla-pid")
-    parser.add_argument("--n_env_steps_per_epoch", type=int, default=100)
+    parser.add_argument("--n_supervised", type=int, default=1000)
+    parser.add_argument("--n_env_steps_per_epoch", type=int, default=1000)
     parser.add_argument("--n_epochs", type=int, default=250)
-    parser.add_argument("--eval_period", type=int, default=1)
+    parser.add_argument("--eval_period", type=int, default=10)
     parser.add_argument("--policy_arch", type=str, default="256-256")
     parser.add_argument("--qf_arch", type=str, default="256-256")
 
@@ -211,14 +223,15 @@ if __name__ == "__main__":
     parser.add_argument("--discount", type=float, default=0.99)
     parser.add_argument("--noise_max_steps", type=int, default=100000)
     parser.add_argument("--reward_scale", type=float, default=1)
-    parser.add_argument("--policy_lr", type=float, default=3e-4)
-    parser.add_argument("--qf_lr", type=float, default=3e-4)
+    parser.add_argument("--policy_lr", type=float, default=1e-4)
+    parser.add_argument("--qf_lr", type=float, default=1e-4)
     parser.add_argument("--soft_target_update_rate", type=float, default=5e-3)
     parser.add_argument("--target_update_period", type=int, default=1)
     args = parser.parse_args()
 
     # update general parameters
     variant["n_env_steps_per_epoch"] = args.n_env_steps_per_epoch
+    variant["n_supervised"] = args.n_supervised
     variant["eval_period"] = args.eval_period
     variant["noise_max_steps"] = args.noise_max_steps
     variant["env"] = args.env

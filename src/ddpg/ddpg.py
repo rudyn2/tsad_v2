@@ -112,6 +112,20 @@ class DDPG(object):
         )
         return ddpg_metrics, batch_metrics
 
+    def train_supervised(self, batch, hlc):
+        observations = batch['observations']
+        actions = batch['actions']
+
+        # supervised loss
+        policy_actions = self.target_policy(observations, hlc)
+        loss = F.mse_loss(policy_actions, actions)
+
+        # update
+        self.policy_optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(list(self.policy.parameters()), self.config.max_grad_norm)
+        self.policy_optimizer.step()
+
     def torch_to_device(self, device):
         for module in self.modules:
             module.to(device)

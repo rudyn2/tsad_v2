@@ -30,13 +30,13 @@ class ReplayBuffer(object):
         self._total_steps = 0
 
     def empty(self):
-        """Empty memory"""        
+        """Empty memory"""
         self._memory.clear()
 
     def push(self, *args):
         """Save a experiences"""
         self._memory.append(self._Transition(*args))
-    
+
     def __len__(self):
         return len(self._memory)
 
@@ -61,7 +61,7 @@ class ReplayBuffer(object):
             sample = random.sample(self._memory, batch_size)
             sample = self._Transition(*zip(*sample))
             return self._unpack(sample)
-    
+
     def _unpack(self, sample):
         unpacked = {}
         for name, value in sample._asdict().items():
@@ -121,7 +121,7 @@ class ReplayBufferHLC(object):
                 f_dones,
                 f_hlcs,
             )
-    
+
     def sample(self, batch_size):
         return {hlc: buffer.sample(batch_size) for hlc, buffer in self._buffers.items()}
 
@@ -141,6 +141,38 @@ class ReplayBufferHLC(object):
     @property
     def total_steps(self):
         return self._total_steps
+
+
+class BCDatasetHLC(object):
+    def __init__(self, data_path: str, hlcs=(0, 1, 2, 3)):
+        self._data_path = data_path
+        self._data = self.read()
+        self._hlcs = hlcs
+
+    def read(self) -> dict:
+        """
+        :return: {
+            str(hlc): {
+                'observations': np.array(...),
+                'actions': np.array(...)
+            }
+         }
+        """
+        return {}
+
+    def sample(self, batch_size: int):
+        return {hlc: self.sample_hlc(batch_size, hlc) for hlc in self._hlcs}
+
+    def sample_hlc(self, batch_size: int, hlc: int):
+        available_idxs = list(range(len(self._data[str(hlc)])))
+        idxs = random.sample(available_idxs, batch_size)
+        return {
+            'observations': np.array(self._data[hlc]['observations'][idxs]),
+            'actions': np.array(self._data[hlc]['actions'][idxs])
+        }
+
+    def len(self):
+        return sum([v['observations'].shape[0] for v in self._data.values()])
 
 
 if __name__ == "__main__":
