@@ -113,8 +113,8 @@ class DDPG(object):
         return ddpg_metrics, batch_metrics
 
     def train_supervised(self, batch, hlc):
-        observations = batch['observations']
-        actions = batch['actions']
+        observations = batch[str(hlc)]['observations']
+        actions = batch[str(hlc)]['actions']
 
         # supervised loss
         policy_actions = self.target_policy(observations, hlc)

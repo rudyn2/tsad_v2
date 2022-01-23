@@ -1,7 +1,10 @@
+import glob
+import os
 import numpy as np
 import torch
 import random
-from collections import deque, namedtuple
+import json
+from collections import deque, namedtuple, defaultdict
 
 
 def batch_to_torch(batch, device):
@@ -146,8 +149,8 @@ class ReplayBufferHLC(object):
 class BCDatasetHLC(object):
     def __init__(self, data_path: str, hlcs=(0, 1, 2, 3)):
         self._data_path = data_path
-        self._data = self.read()
         self._hlcs = hlcs
+        self._data = self.read()
 
     def read(self) -> dict:
         """
@@ -158,17 +161,40 @@ class BCDatasetHLC(object):
             }
          }
         """
-        return {}
+        json_files = glob.glob(os.path.join(self._data_path, "*.json"))
+        all_data = {str(hlc): dict(observations=[], actions=[]) for hlc in self._hlcs}
+        for json_file in json_files:
+            with open(json_file, "r") as f:
+                batch_data = json.load(f)
+            i = 0
+            for ep_key, ep_values in batch_data.items():
+                i += 1
+                print(f"Loading episode: {ep_key} ({i}/{len(batch_data)})")
+                timestamps = list(ep_values.keys())
+                for idx in range(len(timestamps) - 3):
+                    ts = timestamps[idx]
+                    ts_value = ep_values[ts]
+                    rl_hlc = ts_value["command"] - 1
+                    if rl_hlc in self._hlcs:
+                        steer = ts_value["rl"]["action"][2]    # recover action steering
+                        speed = ep_values[timestamps[idx + 3]]["speed"]
+                        all_data[str(rl_hlc)]['observations'].append(np.array(ts_value["rl"]["obs"]))
+                        all_data[str(rl_hlc)]['actions'].append(np.array([speed, steer]))
+
+        for hlc in self._hlcs:
+            all_data[str(hlc)]['observations'] = np.array(all_data[str(hlc)]['observations']).astype(np.float32)
+            all_data[str(hlc)]['actions'] = np.array(all_data[str(hlc)]['actions']).astype(np.float32)
+        return all_data
 
     def sample(self, batch_size: int):
-        return {hlc: self.sample_hlc(batch_size, hlc) for hlc in self._hlcs}
+        return {str(hlc): self.sample_hlc(batch_size, hlc) for hlc in self._hlcs}
 
     def sample_hlc(self, batch_size: int, hlc: int):
-        available_idxs = list(range(len(self._data[str(hlc)])))
+        available_idxs = list(range(len(self._data[str(hlc)]['observations'])))
         idxs = random.sample(available_idxs, batch_size)
         return {
-            'observations': np.array(self._data[hlc]['observations'][idxs]),
-            'actions': np.array(self._data[hlc]['actions'][idxs])
+            'observations': np.array(self._data[str(hlc)]['observations'][idxs]),
+            'actions': np.array(self._data[str(hlc)]['actions'][idxs])
         }
 
     def len(self):
@@ -176,9 +202,11 @@ class BCDatasetHLC(object):
 
 
 if __name__ == "__main__":
+    dataset = BCDatasetHLC(data_path="/home/rudy/Downloads/affordances")
+    sample = dataset.sample(128)
     # pseudo-test
     buffer = ReplayBufferHLC(max_size=10000, hlcs=(0, 1, 2, 3))
-    for _ in range(500):
+    for _ in range(10):
         buffer.add_sample(
             observation=np.random.rand(3),
             action=np.random.rand(2),
@@ -188,3 +216,5 @@ if __name__ == "__main__":
             hlc=random.choice([0, 1, 2, 3])
         )
     samples = buffer.sample(128)
+
+

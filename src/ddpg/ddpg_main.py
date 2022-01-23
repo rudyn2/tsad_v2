@@ -8,6 +8,7 @@ import gym
 import torch
 from gym_carla.envs.carla_env import CarlaEnv
 from gym_carla.envs.carla_pid_env import CarlaPidEnv
+from tqdm import tqdm
 
 from ddpg import DDPG
 from src.models.replay_buffer import ReplayBufferHLC, batch_to_torch, BCDatasetHLC
@@ -40,7 +41,6 @@ ENV_PARAMS = {
     'desired_speed': 6,  # desired speed (m/s)
     'speed_reduction_at_intersection': 0.75,
     'max_ego_spawn_times': 200,  # maximum times to spawn ego vehicle
-    'reward_weights': [0.3, 0.3, 0.3],
 }
 
 
@@ -112,9 +112,9 @@ def main(variant):
     if wandb_config["n_supervised"] > 0 and wandb_config["bc_data"] is not None:
         # read bc dataset
         bc_dataset = BCDatasetHLC(wandb_config["bc_data"], hlcs=ALLOWED_HLCS)
-        for epoch in range(wandb_config["n_supervised"]):
+        for epoch in tqdm(range(wandb_config["n_supervised"]), "Training supervised"):
             for hlc in ALLOWED_HLCS:
-                batch = batch_to_torch(bc_dataset.sample(wandb_config["batch_size"]))
+                batch = batch_to_torch(bc_dataset.sample(wandb_config["batch_size"]), wandb_config["device"])
                 ddpg.train_supervised(batch, hlc)
 
     max_return = 0
@@ -210,10 +210,11 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default="carla-pid")
-    parser.add_argument("--n_supervised", type=int, default=1000)
+    parser.add_argument("--bc_data", type=str, default=None)
+    parser.add_argument("--n_supervised", type=int, default=100000)
     parser.add_argument("--n_env_steps_per_epoch", type=int, default=1000)
-    parser.add_argument("--n_epochs", type=int, default=250)
-    parser.add_argument("--eval_period", type=int, default=10)
+    parser.add_argument("--n_epochs", type=int, default=400)
+    parser.add_argument("--eval_period", type=int, default=20)
     parser.add_argument("--policy_arch", type=str, default="256-256")
     parser.add_argument("--qf_arch", type=str, default="256-256")
 
@@ -235,6 +236,7 @@ if __name__ == "__main__":
     variant["eval_period"] = args.eval_period
     variant["noise_max_steps"] = args.noise_max_steps
     variant["env"] = args.env
+    variant["bc_data"] = args.bc_data
     variant["n_epochs"] = args.n_epochs
     variant["policy_arch"] = args.policy_arch
     variant["qf_arch"] = args.policy_arch           # CHANGE THIS TO QF_ARCH

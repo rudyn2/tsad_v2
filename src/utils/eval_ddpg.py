@@ -102,7 +102,7 @@ if __name__ == "__main__":
 
         policy_arch='128-128-128',
         qf_arch='128-128-128',
-        eval_n_trajs=20,
+        eval_n_trajs=10,
         env_params=ENV_PARAMS
     )
 
